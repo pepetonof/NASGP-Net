@@ -20,6 +20,7 @@ def save_progress(ruta, filename,
                   elitism_inds,
                   invalid_ind, idx, 
                   no_evs, delta_t,
+                  devices,
                   cache
                   ):
     
@@ -31,6 +32,7 @@ def save_progress(ruta, filename,
               elitism_inds=elitism_inds,
               invalid_ind=invalid_ind, idx=idx, 
               no_evs=no_evs, delta_t=delta_t,
+              devices=devices,
               cache=cache,
               rndstate=random.getstate())
     with open(ruta + '/'+ filename, "wb") as cp_file:
