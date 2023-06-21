@@ -161,7 +161,6 @@ def show_statics(estadisticas, rutita):
         p1, = host.plot(gen, size_avgs, "b-", label="Avg Size")
         p2, = par1.plot(gen, depth_avgs, "r-", label="Avg Depth")
         
-        
         host.set_xlabel("Generations")
         host.set_ylabel("Size")
         par1.set_ylabel("Depth")

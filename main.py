@@ -230,8 +230,9 @@ def GPMain(foldername):
     IMAGE_HEIGHT = 256#288 
     IMAGE_WIDTH = 256#480
     NUM_WORKERS = 0 if torch.cuda.is_available() else 0 #Also used for dataloaders
+    BATCH_SIZE = 1
     
-    dloaders = loaders(train_set, valid_set, test_set, batch_size=1, 
+    dloaders = loaders(train_set, valid_set, test_set, batch_size=BATCH_SIZE, 
                      image_height=IMAGE_HEIGHT, image_width=IMAGE_WIDTH, in_channels=in_channels,
                      num_workers=NUM_WORKERS)
        

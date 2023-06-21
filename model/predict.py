@@ -209,7 +209,6 @@ def set_title(tensor,string):
     w, h = font.getsize(string)
     draw=ImageDraw.Draw(pil_image)
     wim, him = pil_image.size
-    # draw.text(((480-w)/2, 15*(288-h)/16), string, font=font, fill='white')
     draw.text(((wim-w)/2, 15*(him-h)/16), string, font=font, fill='blue')
     numpy=np.array(pil_image)
     numpy=np.transpose(numpy, (2,0,1))
@@ -217,6 +216,30 @@ def set_title(tensor,string):
     tensor=tensor.unsqueeze(dim=0) 
     
     return tensor
+
+def set_title2(tensor,string):
+    # font=ImageFont.truetype(r'/home/202201016n/serverBUAP/NASGP-Net/Arial.ttf', 12)
+    font=ImageFont.truetype('arial.ttf',12)
+    w, h = font.getsize(string)
+    out_tensor=[]
+    for i in range(tensor.shape[0]):
+        t=tensor[i]
+        numpy=t.cpu().detach().numpy()
+        numpy=np.transpose(numpy, (1,2,0))
+        pil_image=Image.fromarray(numpy)    
+    
+        draw=ImageDraw.Draw(pil_image)
+        wim, him = pil_image.size
+        draw.text(((wim-w)/2, 15*(him-h)/16), string, font=font, fill='blue')
+        numpy=np.array(pil_image)
+        
+        numpy=np.transpose(numpy, (2,0,1))
+        t=torch.from_numpy(numpy)
+        t=tensor.unsqueeze(dim=0)
+        out_tensor.append(t)
+    out_tensor=torch.cat(out_tensor, dim=0)
+    
+    return out_tensor
 
 def save_grid(objs, num, option, ruta):
     if option == 'best':
