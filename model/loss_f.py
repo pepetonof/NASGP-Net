@@ -150,7 +150,7 @@ class IoULoss(nn.Module):
         
         IoU = (intersection + self.smooth) / (union + self.smooth)
         
-        return 1 - IoU #Loss form
+        return torch.mean(1. - IoU)#1 - IoU #Loss form
 
 #%%IoU function        
 def IoU_loss(inputs:torch.Tensor, targets:torch.Tensor):

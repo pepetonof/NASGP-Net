@@ -15,15 +15,6 @@ import matplotlib.pyplot as plt
 
 """Functions to create multistatics and manipulate 'log' variable after evolutionary process"""
 #%%Statics for evolutionary process
-# def fits(individual):
-#     return individual.fitness.values
-# def depth(individual):
-#     return individual.height
-# def dice(individual):
-#     return individual.dice
-# def params(individual):
-#     return individual.params
-
 def statics_():
     # ##Statics
     stats_fit = tools.Statistics(lambda individual: individual.fitness.values)
@@ -31,9 +22,9 @@ def statics_():
     stats_depth = tools.Statistics(lambda individual: individual.height)
     stats_dice = tools.Statistics(lambda individual: individual.dice)
     stats_params = tools.Statistics(lambda individual: individual.params)
-    stats_hd = tools.Statistics(lambda individual: individual.hds)
-    mstats = tools.MultiStatistics(Fitness=stats_fit, Size=stats_size, Depth=stats_depth,
-                                   Dice=stats_dice, Params=stats_params)
+
+    mstats = tools.MultiStatistics(Fitness=stats_fit, Dice=stats_dice, Params=stats_params,
+                                   Size=stats_size, Depth=stats_depth,)
     
     mstats.register("avg", np.mean)
     mstats.register("std", np.std)
@@ -161,7 +152,6 @@ def show_statics(estadisticas, rutita):
         p1, = host.plot(gen, size_avgs, "b-", label="Avg Size")
         p2, = par1.plot(gen, depth_avgs, "r-", label="Avg Depth")
         
-        
         host.set_xlabel("Generations")
         host.set_ylabel("Size")
         par1.set_ylabel("Depth")
@@ -184,7 +174,7 @@ def show_statics(estadisticas, rutita):
     convergence_graph()
     convergence_graph2()
     size_depth()
-    metrics()
+    # metrics()
     return
     
 #%%Save statics of evolutionary process as csv
@@ -192,7 +182,15 @@ def save_statics(log, ruta):
     gen = log.select("gen")
     evaluations = log.select("nevals")
     time = log.select("time")
-
+    
+    best = log.select('best')
+    best_dice = log.select('best_dice')
+    best_params = log.select('best_params')
+    r_2 = log.select('r_2')
+    mse = log.select('mse')
+    rmse = log.select('rmse')
+    mae = log.select('mae')
+ 
     fit_maxs = log.chapters["Fitness"].select("max")
     fit_mins=log.chapters["Fitness"].select("min")
     fit_prom=log.chapters["Fitness"].select("avg")
@@ -218,14 +216,16 @@ def save_statics(log, ruta):
     depth_avgs = log.chapters["Depth"].select("avg")
     depth_std = log.chapters["Depth"].select("std")
     
-    params    = log.select("params")
-    dice_mean = log.select("dice")
-    iou_mean  = log.select("iou")
-    hds_mean  = log.select("hd")
-    
     dict={'Generations':gen,
           'Evaluations':evaluations,
           'Time':time,
+          'Best_Ind':best,
+          'Best_Dice':best_dice,
+          'Best_Params':best_params,
+          "R_2":r_2,
+          "mse":mse,
+          "rmse":rmse,
+          "mae":mae,
           
           'Fitness_max':fit_maxs,
           'Fitness_min':fit_mins,
@@ -251,11 +251,6 @@ def save_statics(log, ruta):
           'Depth min':depth_min,
           'Depth avg':depth_avgs,
           'Depth std':depth_std,
-          
-          'Best Params': params,
-          'Best Dice Metric': dice_mean,
-          'Best IoU Metric': iou_mean,
-          'Best HD Metric': hds_mean
           }
     daf=pd.DataFrame.from_dict(dict)
     daf.to_csv(ruta+'/proceso_evolutivo.csv', index=False)

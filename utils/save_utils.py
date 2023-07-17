@@ -40,8 +40,12 @@ def save_progress(ruta, filename,
     return
 
 #%%Save infromation of entire execution
-def save_execution(ruta, filename, pop, log, best_model):
-    cp = dict(pop=pop, log=log, best_model=best_model)
+
+def save_execution(ruta, filename, pop, log, cache, best_model): #archive,
+    cp = dict(pop=pop, log=log, 
+              # archive=archive, 
+              cache=cache,
+              best_model=best_model)
     
     with open(ruta + '/'+ filename, "wb") as cp_file:
         pickle.dump(cp, cp_file)
@@ -89,14 +93,16 @@ def saveEvolutionaryDetails(evolutionary_params, best, no_evs, time, filename):
     d.update(evolutionary_params)
     d_aux={"Best":best, "Best_Fitness":best.fitness.values[0], 
            
-           "DiceMean": np.mean(best.dices), "DiceMax":np.max(best.dices),
-           "DiceMin": np.min(best.dices), "DiceStd":np.std(best.dices),
+           "DiceMean":best.dice, "Params":best.params,
            
-           "IoUMean": np.mean(best.ious), "IoUMax": np.max(best.ious),
-           "IoUMin": np.min(best.ious), "IoUStd": np.std(best.ious),
+           # "DiceMean": np.mean(best.dices), "DiceMax":np.max(best.dices),
+           # "DiceMin": np.min(best.dices), "DiceStd":np.std(best.dices),
            
-           "HdMean": np.mean(best.hds), "HdMax": np.max(best.hds),
-           "HdMin": np.min(best.hds), "HdStd": np.std(best.hds),
+           # "IoUMean": np.mean(best.ious), "IoUMax": np.max(best.ious),
+           # "IoUMin": np.min(best.ious), "IoUStd": np.std(best.ious),
+           
+           # "HdMean": np.mean(best.hds), "HdMax": np.max(best.hds),
+           # "HdMin": np.min(best.hds), "HdStd": np.std(best.hds),
            }
     d.update(d_aux)
     d_aux={"No_Evs": no_evs, "Time": time}
@@ -151,23 +157,29 @@ def saveTrainingDetails(training_parameters, loaders,
            }
     d.update(d_aux)
     
+    # d_aux={"Best":str(best), "Best_Fitness":best.fitness.values[0], 
+           
+    #        "DiceMean":best.dice, "Params":best.params,
+    #        }
+    # d.update(d_aux)
+    
     d_aux={"Best":best, "Best_Fitness":best.fitness.values[0], 
            
-           "DiceMean": np.mean(best.dices), "DiceMax":np.max(best.dices),
-           "DiceMin": np.min(best.dices), "DiceStd":np.std(best.dices),
+            "DiceMean": np.mean(best.dices), "DiceMax":np.max(best.dices),
+            "DiceMin": np.min(best.dices), "DiceStd":np.std(best.dices),
            
-           "IoUMean": np.mean(best.ious), "IoUMax": np.max(best.ious),
-           "IoUMin": np.min(best.ious), "IoUStd": np.std(best.ious),
+            "IoUMean": np.mean(best.ious), "IoUMax": np.max(best.ious),
+            "IoUMin": np.min(best.ious), "IoUStd": np.std(best.ious),
            
-           "HdMean": np.mean(best.hds), "HdMax": np.max(best.hds),
-           "HdMin": np.min(best.hds), "HdStd": np.std(best.hds),
-           }
+            "HdMean": np.mean(best.hds), "HdMax": np.max(best.hds),
+            "HdMin": np.min(best.hds), "HdStd": np.std(best.hds),
+            }
     d.update(d_aux)
     
     d_aux={"Summary_Model": summary_model}
     d.update(d_aux)
     
-    with open(filename, 'w') as f: 
+    with open(filename, 'w', encoding="utf-8") as f: 
         for key, value in d.items(): 
             f.write('%s:%s\n' % (key, value))
     

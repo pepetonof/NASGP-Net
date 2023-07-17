@@ -118,6 +118,9 @@ def test(test_loader, model, loss_fn,
                 #For save with torch.utils.save_image()
                 over_masks = (over_masks.float())/255.00
                 over_preds = (over_preds.float())/255.00
+                # print(preds.shape)
+                # print(over_masks.shape,over_preds.shape)
+                
                 torchvision.utils.save_image(over_masks, f"{ruta}/{idx}_overmask.png")
                 torchvision.utils.save_image(over_preds, f"{ruta}/{idx}_overprd.png")
             
@@ -169,7 +172,8 @@ def overlay_imgs(inputs, masks, preds, alpha=0.4):
                 
     inputs=inputs.to("cpu")
     preds=preds.to("cpu")
-    #print(inputs.shape, inputs.dtype, preds.shape, preds.dtype)
+    
+    # print(inputs.shape, inputs.dtype, preds.shape, preds.dtype)
     
     #Si se trata de escala de grises
     #if inputs.shape[1]!=3:
@@ -184,7 +188,7 @@ def overlay_imgs(inputs, masks, preds, alpha=0.4):
         img_and_mask=draw_segmentation_masks(image=img, masks=mask, 
                                              alpha=alpha, colors=(0,255,0))
         img_and_pred=draw_segmentation_masks(image=img, masks=pred, 
-                                             alpha=alpha, colors=(255,0,0))
+                                             alpha=alpha, colors=(255,0,255))
         #print('Test',img.shape, img.dtype, pred.shape, pred.dtype, img_and_pred.shape, img_and_pred.dtype, torch.max(pred), torch.min(pred))
         lst_masks.append(img_and_mask.unsqueeze(dim=0))
         lst_preds.append(img_and_pred.unsqueeze(dim=0))
@@ -202,14 +206,13 @@ def set_title(tensor,string):
     pil_image=Image.fromarray(numpy)    
     
     
-    # font=ImageFont.truetype('arial.ttf',25)
-    font=ImageFont.truetype(r'/home/202201016n/serverBUAP/NASGP-Net/Arial.ttf', 12)
-    #font=ImageFont.truetype(r'/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf', 25)
+    font=ImageFont.truetype('Arial.ttf',25)
+    # font=ImageFont.truetype(r'/home/202201016n/serverBUAP/NASGP-Net/Arial.ttf', 12)
+    # font=ImageFont.truetype(r'/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf', 25)
     
     w, h = font.getsize(string)
     draw=ImageDraw.Draw(pil_image)
     wim, him = pil_image.size
-    # draw.text(((480-w)/2, 15*(288-h)/16), string, font=font, fill='white')
     draw.text(((wim-w)/2, 15*(him-h)/16), string, font=font, fill='blue')
     numpy=np.array(pil_image)
     numpy=np.transpose(numpy, (2,0,1))
@@ -217,6 +220,30 @@ def set_title(tensor,string):
     tensor=tensor.unsqueeze(dim=0) 
     
     return tensor
+
+def set_title2(tensor,string):
+    # font=ImageFont.truetype(r'/home/202201016n/serverBUAP/NASGP-Net/Arial.ttf', 12)
+    font=ImageFont.truetype('Arial.ttf',12)
+    w, h = font.getsize(string)
+    out_tensor=[]
+    for i in range(tensor.shape[0]):
+        t=tensor[i]
+        numpy=t.cpu().detach().numpy()
+        numpy=np.transpose(numpy, (1,2,0))
+        pil_image=Image.fromarray(numpy)    
+    
+        draw=ImageDraw.Draw(pil_image)
+        wim, him = pil_image.size
+        draw.text(((wim-w)/2, 15*(him-h)/16), string, font=font, fill='blue')
+        numpy=np.array(pil_image)
+        
+        numpy=np.transpose(numpy, (2,0,1))
+        t=torch.from_numpy(numpy)
+        t=tensor.unsqueeze(dim=0)
+        out_tensor.append(t)
+    # out_tensor=torch.cat(out_tensor, dim=0)
+    # print(out_tensor.shape)
+    return out_tensor
 
 def save_grid(objs, num, option, ruta):
     if option == 'best':

@@ -9,7 +9,7 @@ import torch.optim as optim
 import numpy as np
 import pygraphviz as pgv
 import matplotlib.pyplot as plt
-# import networkx as nx
+import networkx as nx
 from deap.gp import *
 import hashlib
 # import deap.pg as pg
@@ -17,33 +17,85 @@ import hashlib
 from model.model import BackBone
 from model.train_valid import train_and_validate
 from model.predict import test
+from objective_functions import evaluate_NoParameters, evaluate_Segmentation
 
 def make_model(ind, in_channels, pset):
     """Compile function"""
     func = compile(expr=ind, pset=pset)
     """Init module: empty sequential module"""
-    #init_module=nn.ModuleList()#nn.Sequential()
     init_module=[nn.ModuleList(), in_channels]
     """Output of the first block"""
     first_block=func(init_module)
     
     model=BackBone(first_block)
     return model
+    
+def evaluation(ind, nepochs, lossfn, lr,
+               max_params, w,
+                
+               loaders, pset, device, ruta, verbose_train):
+    
+    # """Make model"""
+    in_channels = loaders.IN_CHANNELS
+    model = make_model(ind, in_channels, pset)
+    
+    #Evaluate Segmentation Metrics
+    metrics, train_valid = evaluate_Segmentation(model, nepochs, lossfn, lr, loaders, 
+                                                 device, ruta, verbose_train)
+    
+    #Evaluate segmentation performance. Use the mean dice
+    dice=np.mean(metrics["dices"])
+    
+    #Evaluate no of parameters
+    complexity, params = evaluate_NoParameters(model, loaders.IN_CHANNELS, max_params, pset)
+    
+    #Fitness as lienar combination of mean dice and the number of parameters
+    fit = (1 - w)*dice + w*complexity
+    
+    return fit, dice, params#, metrics, train_valid, params
 
-def evaluationMP(ind, nepochs, lossfn, lr,
-                 max_params, w,
-                 
+def evaluationMO(ind, nepochs, lossfn, lr,
+                 max_params,
+                
                  loaders, pset, device, ruta, verbose_train):
+    
+    # """Make model"""
+    in_channels = loaders.IN_CHANNELS
+    model = make_model(ind, in_channels, pset)
+    
+    #Evaluate no of parameters
+    complexity, params = evaluate_NoParameters(model, loaders.IN_CHANNELS, max_params, pset)
+    # print(params)
+    
+    #Exceed on COVID
+    #121219529:#680810886:#680810886 #mpool(cat(dCon(conv(mod, 32, 5, 5, 2), 0.7), dCon(sconv(conv(conv(conv(sconv(mod, 32, 5, 7, 1), 16, 7, 3, 2), 32, 7, 5, 2), 32, 7, 7, 1), 8, 5, 7, 1), 0.8)))
+    if params<125000000:
+    
+        #Evaluate Segmentation Metrics
+        metrics, train_valid = evaluate_Segmentation(model, nepochs, lossfn, lr, loaders, 
+                                                     device, ruta, verbose_train)
+        
+        #Evaluate segmentation performance. Use the mean dice
+        dice=np.mean(metrics["dices"])
+    else:
+        dice = 0.9#?
+    
+    # #Fitness as lienar combination of mean dice and the number of parameters
+    # fit = (1 - w)*dice + w*complexity
+    
+    return 1-dice, params, #fit, dice, params#, metrics, train_valid, params
+    
+def evaluationMP(ind, nepochs, lossfn, lr,
+                  max_params, w,
+                 
+                  loaders, pset, device, ruta, verbose_train):
     
     """Train, val and test loaders"""
     train_loader, _ = loaders.get_train_loader() #loaders.get_train_loader(288, 480)
     val_loader, _  = loaders.get_val_loader()
     test_loader, _ = loaders.get_test_loader()
     
-    # in_channels=next(iter(train_loader))[0].shape[1]
-    in_channels = loaders.IN_CHANNELS
-    model = make_model(ind, in_channels, pset)
-    
+
     params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     
     """Hyoperparameters for train"""
@@ -108,22 +160,22 @@ def save_ind(ind, ruta, filename='tree'):
     g.draw(ruta + "/" + filename + '.png')
     return
 
-# """Shows a tree that represents an individual"""
-# def plt_ind(ind):
-#     tree=PrimitiveTree(ind)
-#     nodes, edges, labels = graph(tree)
-#     g = nx.Graph()
-#     g.add_nodes_from(nodes)
-#     g.add_edges_from(edges)
+"""Shows a tree that represents an individual"""
+def plt_ind(ind):
+    tree=PrimitiveTree(ind)
+    nodes, edges, labels = graph(tree)
+    g = nx.Graph()
+    g.add_nodes_from(nodes)
+    g.add_edges_from(edges)
     
-#     pos = nx.nx_agraph.graphviz_layout(g, prog="dot")
+    pos = nx.nx_agraph.graphviz_layout(g, prog="dot")
     
-#     nx.draw_networkx_nodes(g, pos)
-#     nx.draw_networkx_edges(g, pos)
-#     nx.draw_networkx_labels(g, pos, labels)
-#     plt.axis('off')
-#     plt.show()
-#     return
+    nx.draw_networkx_nodes(g, pos)
+    nx.draw_networkx_edges(g, pos)
+    nx.draw_networkx_labels(g, pos, labels)
+    plt.axis('off')
+    plt.show()
+    return
 
 """Shows and save graph of valid an train loss"""
 def save_graphtvd(ind, ruta, filename, show=False):

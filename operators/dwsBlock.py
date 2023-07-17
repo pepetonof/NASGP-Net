@@ -31,14 +31,14 @@ class LazySeparableConv2d(nn.Module):
 class SeparableConv2d(nn.Module):    
     def __init__(self, in_channels, out_channels, kernel_size1, kernel_size2, dilation_rate=1, groupsGN=1, bias=False):
         super(SeparableConv2d, self).__init__()
-        dummy=4
-        self.depthwise = nn.Sequential(nn.Conv2d(in_channels, dummy, (kernel_size1, kernel_size2),
+        # dummy=4
+        self.depthwise = nn.Sequential(nn.Conv2d(in_channels, groupsGN, (kernel_size1, kernel_size2),
                                        stride=1, padding='same', dilation=dilation_rate, 
                                        groups=1, bias=False),
-                                       nn.GroupNorm(groupsGN, dummy),
+                                       nn.GroupNorm(groupsGN, groupsGN),
                                        nn.ReLU(inplace=True)
                                        )
-        self.pointwise = nn.Sequential(nn.Conv2d(dummy, out_channels, kernel_size=1, bias=False),
+        self.pointwise = nn.Sequential(nn.Conv2d(groupsGN, out_channels, kernel_size=1, bias=False),
                                        nn.GroupNorm(groupsGN, out_channels),
                                        nn.ReLU(inplace=True)
                                        )
@@ -50,14 +50,14 @@ class SeparableConv2d(nn.Module):
 class SeparableConv2dRes(nn.Module):    
     def __init__(self, in_channels, out_channels, kernel_size1, kernel_size2, dilation_rate=1, groupsGN=2, bias=False):
         super(SeparableConv2dRes, self).__init__()
-        dummy=4
-        self.depthwise = nn.Sequential(nn.Conv2d(in_channels, dummy, (kernel_size1, kernel_size2),
+        # dummy=4
+        self.depthwise = nn.Sequential(nn.Conv2d(in_channels, groupsGN, (kernel_size1, kernel_size2),
                                         stride=1, padding='same', dilation=dilation_rate, 
                                         groups=1, bias=False),
-                                        nn.GroupNorm(groupsGN, dummy),
+                                        nn.GroupNorm(groupsGN, groupsGN),
                                         nn.ReLU(inplace=True)
                                         )
-        self.pointwiseRes = nn.Sequential(nn.Conv2d(dummy, out_channels, kernel_size=1, bias=False),
+        self.pointwiseRes = nn.Sequential(nn.Conv2d(groupsGN, out_channels, kernel_size=1, bias=False),
                                         nn.GroupNorm(groupsGN, out_channels),
                                         )
     def forward(self, x):

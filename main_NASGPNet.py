@@ -28,7 +28,7 @@ from operators.functionSet import (convolution, sep_convolution,
                              se,
                              add, sub, cat,
                              maxpool, avgpool)
-from toolbox_functions import (make_model, evaluationMP, 
+from toolbox_functions import (make_model, evaluationMP, evaluation,
                                save_ind, save_graphtv, save_graphtvd,
                                identifier)
 
@@ -36,7 +36,8 @@ from model.loss_f import ComboLoss
 from model.train_valid import train_and_validate
 from model.predict import test
 from data.loader import loaders
-from algorithm import NASGP_Net
+# from algorithm import NASGP_Net
+from algorithm_NASGPNet import eaNASGPNet
 from utils.save_utils import saveEvolutionaryDetails, saveTrainingDetails, save_execution
 from utils.deap_utils import statics_, save_statics, show_statics, functionAnalysis
 
@@ -172,7 +173,7 @@ pset.renameArguments(ARG0="mod")
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax, 
                 dices=list, ious=list, hds=list,
-                train_loss=list, valid_loss=list,
+                # train_loss=list, valid_loss=list,
                 params=int, dice=float)
 
 #%%Toolbox
@@ -183,7 +184,8 @@ toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
 
 toolbox.register('make_model', make_model, pset=pset)
-toolbox.register('evaluationMP', evaluationMP, loaders=loaders, pset=pset)
+# toolbox.register('evaluationMP', evaluationMP, loaders=loaders, pset=pset)
+# toolbox.register('evaluate', evaluationMP, loaders=loaders, pset=pset)
 
 toolbox.register("select", tools.selTournament, tournsize=3)
 toolbox.register("selectElitism", tools.selBest)
@@ -213,19 +215,21 @@ toolbox.register("identifier", identifier, length=10)
 #%%GPMAIN
 def GPMain(foldername):
     """Create folder to storage"""
-    path='/scratch/202201016n'
-    ruta=path+"/corridas/"+str(foldername)
+    # foldername="SEA-GS-060623-COVID_SM-P0-2"
+    # path='/scratch/202201016n'
+    path= "C:/Users/josef/OneDrive - Universidad Veracruzana/DIA/EEs/MO-1/Proyecto"
+    ruta=path+"/first_attemtp/"+str(foldername)
     if not os.path.exists(ruta):
         os.makedirs(ruta)
     
     #%% Data
-    path_images='/home/202201016n/serverBUAP/datasets/images_PROMISE'
-    # path_images = 'C:/Users/josef/serverBUAP/datasets/images_PROMISE'
-    in_channels=1
+    # path_images='/home/202201016n/serverBUAP/datasets/images_PROMISE'
+    path_images = 'C:/Users/josef/serverBUAP/datasets/images_DRIVE'
+    in_channels=3
     
     """Get train, valid, test set and loaders"""
-    # train_set, valid_set, test_set = dataSplit.get_data(0.7, 0.15, 0.15, path_images)
-    train_set, valid_set, test_set = dataStatic.get_data(path_images)
+    train_set, valid_set, test_set = dataSplit.get_data(0.7, 0.15, 0.15, path_images)
+    # train_set, valid_set, test_set = dataStatic.get_data(path_images)
     
     IMAGE_HEIGHT = 256#288 
     IMAGE_WIDTH = 256#480
@@ -238,12 +242,16 @@ def GPMain(foldername):
        
     #%% Evolutionary process, evo-statics and parameters
     #Evolutionary parameters
-    pz = 100
-    ng = 20
+    pz = 10
+    ng = 10
     cxpb = 0.8
     mutpb = 0.19
     nelit = 1 
-    tz = 3
+    tz = 7
+    mstats=statics_()
+    hof = tools.HallOfFame(nelit)
+    checkpoint_name = False#'checkpoint_evo.pkl'#False
+    verbose_evo=False
     max_params = 31038000
     w = 0.01
     evolutionary_parameters = {'population_size':pz, 'n_gen': ng, 
@@ -253,28 +261,38 @@ def GPMain(foldername):
     
     
     #Training_parameters
-    ##alpha=0.5, beta=0.4 for MRI and CT
-    num_epochs = 10
-    alpha=0.5
-    beta=0.4
-    loss_fn = ComboLoss(alpha=alpha, beta=beta)
+    # num_epochs = 3
+    # alpha=0.5
+    # beta=0.4
+    # loss_fn = ComboLoss(alpha=alpha, beta=beta)
+    # lr = 0.0001
+    nepochs = 1
+    alpha = 0.5
+    beta = 0.4
+    lossfn = ComboLoss(alpha=alpha, beta=beta)
     lr = 0.0001
-    training_parameters = {'num_epochs':num_epochs, 'loss_f':loss_fn, 'learning_rate':lr}
-    mstats=statics_()
-    hof = tools.HallOfFame(10)
-    checkpoint = False#'checkpoint_evo.pkl'#False
+    training_parameters = {'num_epochs':nepochs, 'loss_f':lossfn, 'learning_rate':lr}
+    verbose_train=False
+    
+    
+    toolbox.register("evaluate", evaluation, nepochs=nepochs, lossfn=lossfn, lr=lr, max_params=max_params, w=w, 
+                                 loaders=dloaders, pset=pset, device="cuda:0", ruta=ruta, verbose_train=verbose_train)
     
     #randomSeeds=int(foldername[-1])
     #random.seed(randomSeeds)
     
     #%%Run algorithm
-    ea = NASGP_Net(evolutionary_parameters, training_parameters,
-                    toolbox = toolbox, pset = pset, loaders = dloaders,
-                    stats = mstats, halloffame = hof, verbose_evo=False, verbose_train=False,
-                    checkpoint = checkpoint, ruta = ruta, foldername=foldername
-                    )
+    # ea = NASGP_Net(evolutionary_parameters, training_parameters,
+    #                 toolbox = toolbox, pset = pset, loaders = dloaders,
+    #                 stats = mstats, halloffame = hof, verbose_evo=False, verbose_train=False,
+    #                 checkpoint = checkpoint, ruta = ruta, foldername=foldername
+    #                 )
+    # pop, log = ea.run()
     
-    pop, log = ea.run()
+    pop, log, cache = eaNASGPNet(pop_size = pz, toolbox = toolbox, cxpb = cxpb, mutpb = mutpb, ngen = ng, nelit = nelit, 
+                           # gen_update, p, m,
+                           ruta = ruta, checkpoint_name = checkpoint_name,
+                           stats=mstats, halloffame=hof, verbose_evo=verbose_evo)
     
     #%%Save statistics
     """Show and save Statics as .png and .csv"""
@@ -288,7 +306,7 @@ def GPMain(foldername):
     #%%Evo Details
     """Save details about evolutionary process"""
     saveEvolutionaryDetails(evolutionary_parameters, best,
-                            ea.no_evs, ea.delta_t,
+                            log.select("nevals"), log.select("time"),
                             filename=ruta+'/evolution_details.txt')
     
     #%%Function frequency
@@ -307,10 +325,10 @@ def GPMain(foldername):
     optimizer = optim.Adam(model.parameters(), lr=lr)
     
     """Epocas de re-entrenamiento"""
-    num_epochs=100
+    nepochs=5
     
     """Device"""
-    device='cuda:2'
+    device='cuda:0'
     
     """For save images or model"""
     save_model_flag=True
@@ -321,13 +339,13 @@ def GPMain(foldername):
     """Train and valid model"""
     train_loss, valid_loss, train_dice, valid_dice = train_and_validate(
         model, train_loader, val_loader,
-        num_epochs, optimizer, loss_fn,
+        nepochs, optimizer, lossfn,
         device, load_model, save_model_flag,
         ruta=ruta, verbose=True
         )
     
     """Test model"""
-    dices, ious, hds = test(test_loader, model, loss_fn,
+    dices, ious, hds = test(test_loader, model, lossfn,
                             save_imgs=save_images_flag, ruta=ruta, device=device, verbose=True)
     
     #%%Attributes assigned
@@ -362,7 +380,7 @@ def GPMain(foldername):
                         best_model, summary_model,
                         filename=ruta+'/Retrain_best_details.txt')
     
-    save_execution(ruta, foldername+'.pkl', pop, log, best_model)
+    save_execution(ruta, foldername+'.pkl', pop, log, cache, best_model)
     
     del model
     
@@ -392,7 +410,7 @@ def n_runs(rango=(1,2)):
     
 
 if __name__=='__main__':
-    mp.set_start_method('forkserver')
+    # mp.set_start_method('forkserver')
     log, pop, best = GPMain('NASGP-Net0')
     
 #    results=n_runs(rango=(4,5))
