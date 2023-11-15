@@ -21,15 +21,27 @@ def statics_():
     stats_size = tools.Statistics(len)
     stats_depth = tools.Statistics(lambda individual: individual.height)
     stats_dice = tools.Statistics(lambda individual: individual.dice)
+    stats_iou = tools.Statistics(lambda individual: individual.iou)
+    stats_hd = tools.Statistics(lambda individual: individual.hd)
+    stats_hd95 = tools.Statistics(lambda individual: individual.hd95)
+    # stats_nds = tools.Statistics(lambda individual: individual.nds)
     stats_params = tools.Statistics(lambda individual: individual.params)
 
-    mstats = tools.MultiStatistics(Fitness=stats_fit, Dice=stats_dice, Params=stats_params,
-                                   Size=stats_size, Depth=stats_depth,)
+    mstats = tools.MultiStatistics(Fitness=stats_fit, 
+                                   Dice=stats_dice,
+                                   IoU=stats_iou,
+                                   HD=stats_hd,
+                                   HD95=stats_hd95,
+                                   # nds=stats_nds,
+                                   Params=stats_params,
+                                   Size=stats_size, 
+                                   Depth=stats_depth,)
     
-    mstats.register("avg", np.mean)
+    mstats.register("mean", np.mean)
     mstats.register("std", np.std)
     mstats.register("min", np.min)
     mstats.register("max", np.max)
+    mstats.register("median", np.median)
     
     return mstats
 
@@ -174,9 +186,28 @@ def show_statics(estadisticas, rutita):
     convergence_graph()
     convergence_graph2()
     size_depth()
-    # metrics()
+    metrics()
     return
-    
+
+#%% Save as csv
+def log2csv(log, mstats, ruta):    
+    lst_keys=[]
+    lst_vals=[]
+    for h in log.header:
+        if h in list(log.chapters.keys()):
+            for sts in mstats[h].fields:
+                # print(sts)
+                lst_keys.append(h+"_"+sts)
+                lst_vals.append(log.chapters[h].select(sts))
+        else:
+            lst_keys.append(h)
+            lst_vals.append(log.select(h))
+         
+    df=pd.DataFrame.from_dict(dict(zip(lst_keys, lst_vals)))
+    df.to_csv(ruta+'/logbook.csv', index=False)
+            
+    return
+
 #%%Save statics of evolutionary process as csv
 def save_statics(log, ruta):
     gen = log.select("gen")
@@ -185,11 +216,16 @@ def save_statics(log, ruta):
     
     best = log.select('best')
     best_dice = log.select('best_dice')
+    best_iou = log.select('best_iou')
+    best_hd = log.select('best_hd')
+    best_hd95 = log.select('best_hd95')
+    best_nds = log.select('best_nds')
     best_params = log.select('best_params')
-    r_2 = log.select('r_2')
-    mse = log.select('mse')
-    rmse = log.select('rmse')
-    mae = log.select('mae')
+    
+    # r_2 = log.select('r_2')
+    # mse = log.select('mse')
+    # rmse = log.select('rmse')
+    # mae = log.select('mae')
  
     fit_maxs = log.chapters["Fitness"].select("max")
     fit_mins=log.chapters["Fitness"].select("min")
@@ -222,10 +258,10 @@ def save_statics(log, ruta):
           'Best_Ind':best,
           'Best_Dice':best_dice,
           'Best_Params':best_params,
-          "R_2":r_2,
-          "mse":mse,
-          "rmse":rmse,
-          "mae":mae,
+          # "R_2":r_2,
+          # "mse":mse,
+          # "rmse":rmse,
+          # "mae":mae,
           
           'Fitness_max':fit_maxs,
           'Fitness_min':fit_mins,

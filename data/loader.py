@@ -15,10 +15,12 @@ from albumentations.augmentations.geometric.transforms import ElasticTransform
 from albumentations.pytorch.transforms import ToTensorV2
 from data.dataset import DataSet
 
+
 class loaders():
     def __init__(self, train, valid, test, batch_size, 
-                 image_height, image_width, in_channels,
-                 num_workers=2, pin_memory=True):
+                 image_height, image_width, 
+                 in_channels, out_channels,):
+                 #num_workers=2, pin_memory=True):
         
         self.TRAIN_IMG_DIR  = train["images"]
         self.VAL_IMG_DIR    = valid["images"]
@@ -32,8 +34,9 @@ class loaders():
         self.IMAGE_HEIGHT   = image_height
         self.IMAGE_WIDTH    = image_width
         self.IN_CHANNELS    = in_channels
-        self.NUM_WORKERS    = num_workers
-        self.PIN_MEMORY     = pin_memory
+        self.OUT_CHANNELS   = out_channels
+        # self.NUM_WORKERS    = num_workers
+        # self.PIN_MEMORY     = pin_memory
         
         
         if self.IN_CHANNELS==3:
@@ -55,7 +58,7 @@ class loaders():
                 A.Resize(height=self.IMAGE_HEIGHT, width=self.IMAGE_WIDTH),
                 A.HorizontalFlip(p=0.5),
                 ElasticTransform(alpha=1, sigma=10, alpha_affine=20, interpolation=1, 
-                                 border_mode= 0, approximate=True, p=0.8),
+                                  border_mode= 0, approximate=True, p=0.8),
                 A.GridDistortion(num_steps=10, border_mode=0, p=0.5),
                 self.normalization_layer,
                 ToTensorV2(),
@@ -64,17 +67,18 @@ class loaders():
             image_dir=self.TRAIN_IMG_DIR,
             mask_dir=self.TRAIN_MASK_DIR,
             transform=train_transform,
+            no_classes = self.OUT_CHANNELS,
         )
         train_loader = DataLoader(
             train_ds,
             batch_size=self.BATCH_SIZE,
-            num_workers=self.NUM_WORKERS,
-            pin_memory=self.PIN_MEMORY,
+            # num_workers=self.NUM_WORKERS,
+            # pin_memory=self.PIN_MEMORY,
             shuffle=True,
         )
         return train_loader, train_ds,
     
-    def get_val_loader(self, num_workers=2):
+    def get_val_loader(self):
         val_transform = A.Compose(
                         [   
                             # A.ToGray(p=1.0),
@@ -87,18 +91,19 @@ class loaders():
             image_dir=self.VAL_IMG_DIR,
             mask_dir=self.VAL_MASK_DIR,
             transform=val_transform,
+            no_classes = self.OUT_CHANNELS
         )
 
         val_loader = DataLoader(
             val_ds,
-            batch_size=self.BATCH_SIZE,
-            num_workers=self.NUM_WORKERS,
-            pin_memory=self.PIN_MEMORY,
+            batch_size=1,#self.BATCH_SIZE,
+            # num_workers=self.NUM_WORKERS,
+            # pin_memory=self.PIN_MEMORY,
             shuffle=False,
         )
         return val_loader, val_ds
     
-    def get_test_loader(self, num_workers=2):
+    def get_test_loader(self):
         test_transform = A.Compose(
                         [   
                             # A.ToGray(p=1.0),
@@ -111,13 +116,14 @@ class loaders():
             image_dir=self.TEST_IMG_DIR,
             mask_dir=self.TEST_MASK_DIR,
             transform=test_transform,
+            no_classes = self.OUT_CHANNELS
         )
-        
+        #Test data always use batch size of 1
         test_loader = DataLoader(
             test_ds,
-            batch_size=self.BATCH_SIZE,
-            num_workers=self.NUM_WORKERS,
-            pin_memory=self.PIN_MEMORY,
+            batch_size=1,#self.BATCH_SIZE,
+            # num_workers=self.NUM_WORKERS,
+            # pin_memory=self.PIN_MEMORY,
             shuffle=False,
         )
         return test_loader, test_ds

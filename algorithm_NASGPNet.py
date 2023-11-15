@@ -8,10 +8,10 @@ Created on Wed Jun 21 20:06:05 2023
 from deap import tools
 import pickle
 import random
-import numpy as np
+# import numpy as np
 from datetime import datetime, timedelta
-import matplotlib.pyplot as plt
-from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+# import matplotlib.pyplot as plt
+# from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 
 
 #%%Variation Operators
@@ -55,21 +55,13 @@ def MateMutation(population, toolbox, lambda_, cxpb, mutpb):
 #%%Checkpoint
 def checkpoint(generation, population, offspring,
                invalid_ind, idx, elitism_inds,
-                # train_pop, 
-               # train_set, train_labels,
-               # surr_metrics,
-               # rf,
-               no_evs, delta_t, cache, #archive,
+               no_evs, delta_t, cache,
                halloffame, logbook,
                rndstate, ruta):
     
     # Fill the dictionary using the dict(key=value[, ...]) constructor
     cp = dict(generation=generation, population=population, offspring=offspring,
                invalid_ind=invalid_ind, idx=idx, elitism_inds=elitism_inds,
-                # train_pop=train_pop, 
-               # train_set=train_set, train_labels=train_labels, 
-               # surr_metrics=surr_metrics,
-               # rf=rf,
                no_evs=no_evs, delta_t=delta_t, cache=cache, #archive=archive,
                halloffame=halloffame, logbook=logbook,
                rndstate=rndstate)
@@ -86,28 +78,40 @@ def assign_attributes(_ind, key, cache, toolbox, surrogate=None):
         #Assign attributes from cache
         _ind.fitness.values = cache[key].fitness.values
         _ind.dice = cache[key].dice
+        _ind.iou = cache[key].iou
+        _ind.hd95 = cache[key].hd
+        _ind.hd = cache[key].hd95
+        # _ind.nsd = cache[key].nsd
         _ind.params = cache[key].params
+                
         print('Syntax tree:\t', str(_ind), round(_ind.fitness.values[0],3), round(_ind.dice,3), _ind.params, "\t in cache")
         
     else:
-        #Assign attributes from the original objective function
-        if surrogate == None:
-            fit = toolbox.evaluate(_ind)
-            # print("From original", fit, type(fit))
-            _ind.fitness.values = fit[0],
-            _ind.dice = fit[1]
-            _ind.params = fit[2]
-            print('Syntax tree:\t', str(_ind), round(fit[0],3), round(fit[1],3), fit[2], "\t in original")
+        # #Assign attributes from the original objective function
+        # if surrogate == None:
+        fit = toolbox.evaluate(_ind)
+        _ind.fitness.values = fit[0],
+        _ind.dice = fit[1]
+        _ind.iou = fit[2]
+        _ind.hd = fit[3]
+        _ind.hd95 = fit[4]
+        # _ind.nsd = fit[5]
+        _ind.params = fit[5]
+        
+        print('Syntax tree:\t', str(_ind), round(_ind.fitness.values[0], 3), round(_ind.dice,3), _ind.params, "\t in original")
             
-        #Assign attributes from the surrogate model
-        else:
-            fit = toolbox.evaluate_surrogate(_ind, surrogate)
-            # print("From surrogate", fit, type(fit))
-            _ind.fitness.values = fit[0],
-            _ind.dice = fit[1]
-            _ind.params = fit[2]
+        # #Assign attributes from the surrogate model
+        # else:
+        #     fit = toolbox.evaluate_surrogate(_ind, surrogate)
+        #     _ind.fitness.values = fit[0],
+        #     _ind.dice = fit[1]
+        #     _ind.iou = fit[2]
+        #     _ind.hd = fit[3]
+        #     _ind.hd95 = fit[4]
+        #     # _ind.nds = fit[5]
+        #     _ind.params = fit[5]
             
-            print('Syntax tree:\t', str(_ind), round(fit[0],3), round(fit[1],3), fit[2], "\t in surrogate")    
+        #     print('Syntax tree:\t', str(_ind), round(_ind.fitness.values[0],3), round(_ind.dice,3), _ind.params, "\t in surrogate")    
     return _ind
 
 #%%NASGP-Net Algorithm
@@ -148,44 +152,59 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
         start_gen  = 0
         halloffame = tools.HallOfFame(maxsize=nelit)
         logbook = tools.Logbook()
-        logbook.header = ['gen', 'nevals', 'time', 'best', 'best_dice', 'best_params',
-                          (stats.fields if stats else [])]
-                          # 'r_2', 'mse', 'rmse', 'mae'
+        logbook.header = ['gen', 'nevals', 'time', 'best', 
+                          'best_dice',
+                          'best_iou',
+                          'best_hd',
+                          'best_hd95',
+                          # 'best_nds',
+                          'best_params'] + (stats.fields if stats else [])
         offspring = []
         elitism_inds = []
-        
-        ###Surrogate metrics
-        # surr_metrics={}
         
         ###Count the number of evaluations and evaluated individuals
         idx=0
         no_evs=0
         cache={}
-        # archive=np.empty([])
-        
-        # #Generate archive and cache
-        # cache, archive = toolbox.cache_archive()
-        # train_set = archive[:,:-1]
-        # train_labels = archive[:,-1]
-        
-        # #Generate surrogate model
-        # rf = toolbox.train_surrogate(train_set, train_labels)
         
         ###Individuals to evaluate
         invalid_ind = [ind for ind in population if not ind.fitness.valid]
         
     #%%%%Start option 1
     #Si no ha terminado con invalid ind y sigue en la generacion 0
-    if idx<len(invalid_ind) and start_gen == 0:
+    if idx<len(invalid_ind): #and start_gen == 0:
         #Evaluate using cache or surrogate model;
         while idx < len(invalid_ind):
             ind = invalid_ind[idx]
             key = toolbox.identifier(ind)
             
-            ind = assign_attributes(ind, key, cache, toolbox, surrogate=None)
+            #Predict using original fitness function
+            # ind = assign_attributes(ind, key, cache, toolbox, surrogate=None)
             
-            #Add to cache when original objective function is used
-            if key not in cache:
+            if key in cache:
+                #Assign attributes from cache
+                ind.fitness.values = cache[key].fitness.values
+                ind.dice = cache[key].dice
+                ind.iou = cache[key].iou
+                ind.hd95 = cache[key].hd
+                ind.hd = cache[key].hd95
+                # _ind.nsd = cache[key].nsd
+                ind.params = cache[key].params
+                        
+                print('Syntax tree:\t', str(ind), round(ind.fitness.values[0],3), round(ind.dice,3), ind.params, "\t in cache")
+                
+            else:
+                # #Assign attributes from the original objective function
+                # if surrogate == None:
+                fit = toolbox.evaluate(ind)
+                ind.fitness.values = fit[0],
+                ind.dice = fit[1]
+                ind.iou = fit[2]
+                ind.hd = fit[3]
+                ind.hd95 = fit[4]
+                # _ind.nsd = fit[5]
+                ind.params = fit[5]
+                
                 #Add to cache
                 cache[key]=ind
                 
@@ -193,19 +212,17 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
                 ####and key is not in cache
                 no_evs+=1
                 
-                # #Get features of individual
-                # features=toolbox.get_features(ind)
-                # labels=np.array([ind.dice])
-                # features=np.expand_dims(np.array(features),axis=0)
-                # labels=np.expand_dims(np.array(labels),axis=0)
-                # new_instance=np.concatenate((features,labels), axis=1)
-                
-                # #Add it to archive
-                # if archive.shape==():
-                #     archive = new_instance
-                # else:
-                #     archive = np.concatenate((archive, new_instance), axis=0)
+                print('Syntax tree:\t', str(ind), round(ind.fitness.values[0], 3), round(ind.dice,3), ind.params, "\t in original")
             
+            # #Add to cache when original objective function is used
+            # if key not in cache:
+            #     #Add to cache
+            #     cache[key]=ind
+                
+            #     ####Increment the number of evaluations when original objective function is used
+            #     ####and key is not in cache
+            #     no_evs+=1
+                
             ####Increment the number of evaluated individuals from invalid ind
             idx+=1
             
@@ -217,80 +234,84 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
             ####Checkpoint every evaluation and every generation
             checkpoint(generation=start_gen, population=population, offspring=offspring,
                        invalid_ind=invalid_ind, idx=idx, elitism_inds=elitism_inds,
-                       # train_pop=train_pop, 
-                       # train_set=[], train_labels=[],
-                       # surr_metrics=surr_metrics, archive=archive,
-                       # rf=None,
                        no_evs=no_evs, delta_t=delta_t, cache=cache,
                        halloffame=halloffame, logbook=logbook,
                        rndstate=random.getstate(), ruta=ruta)
             
-            print(f"{idx}/{len(invalid_ind)}", start_gen, ruta.split("/").pop())
+            print(f"{idx}/{len(invalid_ind)}", start_gen, ruta.split("/").pop(), delta_t)
          
         best_ind = tools.selBest(population, 1)[0]
-        print(str(best_ind), best_ind.fitness.values, best_ind.dice, best_ind.params)
         print('Best:', str(best_ind), round(best_ind.fitness.values[0],3), round(best_ind.dice,3),best_ind.params, start_gen)
         
         # Append the current generation statistics to the logbook
         record = stats.compile(population) if stats else {}
-        logbook.record(gen=start_gen, nevals=no_evs, time=delta_t,
-                       best = str(best_ind), best_dice=best_ind.dice, best_params=best_ind.params,
-                       # r_2=None, mse=None, 
-                       # rmse=None, mae=None,
-                       **record)
-    
-    #%%%Start option 2
-    #Si no ha terminado con 'invalid_ind' en la sesión anterior pero ya ha
-    #finalizado con generación 0
-    if idx<len(invalid_ind) and start_gen > 0:
-        #Evaluate using cache or surrogate model;
-        while idx < len(invalid_ind):
-            ind = invalid_ind[idx]
-            key = toolbox.identifier(ind)
-            
-            #Precird the fitness valies of new inds via surrogate model
-            ind = assign_attributes(ind, key, cache, toolbox, surrogate=None)
-            
-            #Add to cache when original objective function is used
-            if key not in cache:
-                #Add to cache
-                cache[key]=ind
-                
-                ##Increment the number of evaluations when original objective function is used
-                ##and key is not in cache
-                no_evs+=1
-                
-            ####Increment the number of evaluated individuals from invalid ind
-            idx+=1
-            
-            ####Take time every evaluation
-            t = datetime.now()
-            delta_t += (t - init_time)
-            init_time = t #Keep delta_t, no matters loose t
-            
-            ####Checkpoint every evaluation and every generation
-            checkpoint(generation=start_gen, population=population, offspring=offspring,
-                       invalid_ind=invalid_ind, idx=idx, elitism_inds=elitism_inds,
-                       # train_pop=train_pop, 
-                       # train_set=train_set, train_labels=train_labels,
-                       # surr_metrics=surr_metrics, archive=archive,
-                       # rf=rf,
-                       no_evs=no_evs, delta_t=delta_t, cache=cache,
-                       halloffame=halloffame, logbook=logbook,
-                       rndstate=random.getstate(), ruta=ruta)
-            
-            print(f"{idx}/{len(invalid_ind)}", start_gen, ruta.split("/").pop())
         
-        best_ind = tools.selBest(population, 1)[0]
-        print('Best:', str(best_ind), round(best_ind.fitness.values[0],3), round(best_ind.dice,3),best_ind.params, start_gen)
-        
-        # Append the current generation statistics to the logbook
-        record = stats.compile(population) if stats else {}
         logbook.record(gen=start_gen, nevals=no_evs, time=delta_t,
-                       best = str(best_ind), best_dice=best_ind.dice, best_params=best_ind.params,
-                        # r_2=surr_metrics["r2"], mse=surr_metrics["mse"], 
-                        # rmse=surr_metrics["rmse"], mae=surr_metrics["mae"],
+                       best = str(best_ind), 
+                       best_dice=best_ind.dice,
+                       best_iou=best_ind.iou,
+                       best_hd=best_ind.hd,
+                       best_hd95=best_ind.hd95,
+                       # best_nds=best_ind.nds,
+                       best_params=best_ind.params,
                        **record)
+        
+        #For print
+        if verbose_evo:
+            print(logbook.stream)
+        
+    # #%%%Start option 2
+    # #Si no ha terminado con 'invalid_ind' en la sesión anterior pero ya ha
+    # #finalizado con generación 0
+    # if idx<len(invalid_ind) and start_gen > 0:
+    #     #Evaluate using cache or surrogate model;
+    #     while idx < len(invalid_ind):
+    #         ind = invalid_ind[idx]
+    #         key = toolbox.identifier(ind)
+            
+    #         #Precird the fitness valies of new inds via surrogate model
+    #         ind = assign_attributes(ind, key, cache, toolbox, surrogate=None)
+            
+    #         #Add to cache when original objective function is used
+    #         if key not in cache:
+    #             #Add to cache
+    #             cache[key]=ind
+                
+    #             ##Increment the number of evaluations when original objective function is used
+    #             ##and key is not in cache
+    #             no_evs+=1
+                
+    #         ####Increment the number of evaluated individuals from invalid ind
+    #         idx+=1
+            
+    #         ####Take time every evaluation
+    #         t = datetime.now()
+    #         delta_t += (t - init_time)
+    #         init_time = t #Keep delta_t, no matters loose t
+            
+    #         ####Checkpoint every evaluation and every generation
+    #         checkpoint(generation=start_gen, population=population, offspring=offspring,
+    #                    invalid_ind=invalid_ind, idx=idx, elitism_inds=elitism_inds,
+    #                    no_evs=no_evs, delta_t=delta_t, cache=cache,
+    #                    halloffame=halloffame, logbook=logbook,
+    #                    rndstate=random.getstate(), ruta=ruta)
+            
+    #         print(f"{idx}/{len(invalid_ind)}", start_gen, ruta.split("/").pop())
+        
+    #     best_ind = tools.selBest(population, 1)[0]
+    #     print('Best:', str(best_ind), round(best_ind.fitness.values[0],3), round(best_ind.dice,3),best_ind.params, start_gen)
+        
+    #     # Append the current generation statistics to the logbook
+    #     record = stats.compile(population) if stats else {}
+    #     logbook.record(gen=start_gen, nevals=no_evs, time=delta_t,
+    #                    best = str(best_ind),
+    #                    best_dice=best_ind.dice,
+    #                    best_iou=best_ind.iou,
+    #                    best_hd=best_ind.hd,
+    #                    best_hd95=best_ind.hd95,
+    #                    best_nds=best_ind.nds,
+    #                    best_params=best_ind.params,
+    #                    **record)
     
     #%%%Start option 3
     #Si ya ha terminado con "invalid_ind" en la sesión anterior o si no checkpoint_name, 
@@ -306,41 +327,57 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
             elitism_inds = toolbox.selectElitism(population_for_eli, k=nelit)
             offspring = toolbox.select(population, len(population) - nelit)
             offspring = MateMutation(offspring, toolbox, len(offspring), cxpb, mutpb)
-            # offspring = MateMutationParentFitness(offspring, toolbox, len(offspring), cxpb, mutpb)
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
             idx = 0
             
-            #Build the global surrogate model using archive            
-            #If len(train_set)>50:
-            #else
-            
-            # if len(archive>m):
-            #     #select randomly m elements
-            #     train_set_idx = np.arange(np.random.choice(np.arange(len(archive)), size=m), replace=False)
-            #     train_set = np.array([train_set[idx, :-1] for idx in train_set_idx])
-            #     train_labels = np.array([train_labels[idx, -1] for idx in train_set_idx])
-            # else:
-            # train_set = archive[:,:-1]
-            # train_labels = archive[:,-1]
-            
-            # rf = toolbox.train_surrogate(train_set, train_labels)
-            
-            #Evaluate using cache or surrogate model;
+            #Evaluate using cache or original model;
             while idx < len(invalid_ind):
                 ind = invalid_ind[idx]
                 key = toolbox.identifier(ind)
-                    
-                # ind = assign_attributes(ind, key, cache, toolbox, surrogate=rf)
-                ind = assign_attributes(ind, key, cache, toolbox, surrogate=None)
                 
-                #Add to cache when original objective function is used
-                if key not in cache:
+                # ind = assign_attributes(ind, key, cache, toolbox, surrogate=None)
+                if key in cache:
+                    #Assign attributes from cache
+                    ind.fitness.values = cache[key].fitness.values
+                    ind.dice = cache[key].dice
+                    ind.iou = cache[key].iou
+                    ind.hd95 = cache[key].hd
+                    ind.hd = cache[key].hd95
+                    # _ind.nsd = cache[key].nsd
+                    ind.params = cache[key].params
+                            
+                    print('Syntax tree:\t', str(ind), round(ind.fitness.values[0],3), round(ind.dice,3), ind.params, "\t in cache")
+                    
+                else:
+                    # #Assign attributes from the original objective function
+                    # if surrogate == None:
+                    fit = toolbox.evaluate(ind)
+                    ind.fitness.values = fit[0],
+                    ind.dice = fit[1]
+                    ind.iou = fit[2]
+                    ind.hd = fit[3]
+                    ind.hd95 = fit[4]
+                    # _ind.nsd = fit[5]
+                    ind.params = fit[5]
+                    
                     #Add to cache
                     cache[key]=ind
                     
                     ####Increment the number of evaluations when original objective function is used
                     ####and key is not in cache
                     no_evs+=1
+                    
+                    print('Syntax tree:\t', str(ind), round(ind.fitness.values[0], 3), round(ind.dice,3), ind.params, "\t in original")
+                
+                
+                # #Add to cache when original objective function is used
+                # if key not in cache:
+                #     #Add to cache
+                #     cache[key]=ind
+                    
+                #     ####Increment the number of evaluations when original objective function is used
+                #     ####and key is not in cache
+                #     no_evs+=1
                 
                 ####Increment the number of evaluated individuals from invalid ind
                 idx+=1
@@ -353,78 +390,11 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
                 ####Checkpoint every evaluation and every generation
                 checkpoint(generation=gen, population=population, offspring=offspring,
                            invalid_ind=invalid_ind, idx=idx, elitism_inds=elitism_inds,
-                           # train_pop=train_pop, 
-                           # train_set=train_set, train_labels=train_labels,
-                           # surr_metrics=surr_metrics, archive=archive,
-                           # rf=rf,
                            no_evs=no_evs, delta_t=delta_t, cache=cache,
                            halloffame=halloffame, logbook=logbook,
                            rndstate=random.getstate(), ruta=ruta)
                 
-                print(f"{idx}/{len(invalid_ind)}", gen, ruta.split("/").pop())
-            
-            #%%Evolution Control
-            # print("Evolution Control\n")
-            # #Evaluate p top ranking individuals of invalid ind via
-            # #real fitness function
-            # pred_dice = np.array([ind.dice for ind in offspring])
-            # ptop_idx = np.flip(pred_dice.argsort())
-            
-            # #%%%Update cache adn archive based on ptop
-            # real_dice=[]
-            # pred_dice=[]
-            # for i in ptop_idx[:p]:
-            #     key=toolbox.identifier(offspring[i])
-            #     print("Before\t", offspring[i], offspring[i].dice)
-                
-            #     real=assign_attributes(toolbox.clone(offspring[i]), key, cache, toolbox, surrogate=None)
-            #     real_dice.append(real.dice)
-            #     pred_dice.append(offspring[i].dice)
-            #     print("After\t", real, real.dice, "\n\n")
-            #     no_evs+=1
-                
-            #     if key not in cache:
-            #         #Add to cache
-            #         cache[key]=real
-                    
-            #         #Get features of "real" individual
-            #         features=toolbox.get_features(real)
-            #         labels=np.array([real.dice])
-            #         features=np.expand_dims(np.array(features),axis=0)
-            #         labels=np.expand_dims(np.array(labels),axis=1)
-
-            #         new_instance=np.concatenate((features,labels), axis=1)
-                    
-            #         #Update archive
-            #         if archive.shape==():
-            #             archive = new_instance
-            #         else:
-            #             archive = np.concatenate((archive, new_instance), axis=0)
-            #     print("Size Archive Cache:\t", len(archive),len(cache))
-            
-            # #Compute metrics
-            # print("Real Dice \t", real_dice)
-            # print("Pred Dice \t", pred_dice)
-            
-            # r2=r2_score(real_dice, pred_dice)
-            # mse=mean_squared_error(real_dice, pred_dice)
-            # rmse=mean_squared_error(real_dice, pred_dice, squared=False)
-            # mae=mean_absolute_error(real_dice, pred_dice)
-            # surr_metrics=dict(r2=r2,mse=mse,rmse=rmse,mae=mae)
-            
-            # print('Surrogate metrics:\t', surr_metrics["r2"], surr_metrics["mse"], 
-            #                               surr_metrics["rmse"], surr_metrics["mae"])
-            
-            # #Save the real vs predicted value plot
-            # fig, ax = plt.subplots()
-            # sizes = np.random.uniform(15, 80, len(real_dice))
-            # colors = np.random.uniform(15, 80, len(real_dice))
-            # ax.scatter(real_dice, pred_dice, s=sizes, c=colors, vmin=0, vmax=100)
-            # ax.set_xlabel("real dice")
-            # ax.set_ylabel("predicted dice")
-            # ax.set_title("R^2="+str(round(r2,6)))
-            # plt.savefig(ruta+"/"+ruta.split("/").pop()+"-"+str(gen))
-            # plt.show()
+                print(f"{idx}/{len(invalid_ind)}", gen, ruta.split("/").pop(), delta_t)
                 
             #Back the elitism individuals to population
             offspring.extend(elitism_inds)
@@ -436,10 +406,6 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
             #Replace the curren population by the offspring
             population[:] = offspring
             
-            #For print
-            if verbose_evo:
-                print(logbook.stream)
-                
             ####Take time every evaluation
             t = datetime.now()
             delta_t += (t - init_time)
@@ -448,10 +414,6 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
             ####Checkpoint every evaluation and every generation
             checkpoint(generation=gen, population=population, offspring=offspring,
                        invalid_ind=invalid_ind, idx=idx, elitism_inds=elitism_inds,
-                       # train_pop=train_pop, 
-                       # train_set=train_set, train_labels=train_labels,
-                       # surr_metrics=surr_metrics, archive=archive,
-                       # rf=rf,
                        no_evs=no_evs, delta_t=delta_t, cache=cache,
                        halloffame=halloffame, logbook=logbook,
                        rndstate=random.getstate(), ruta=ruta)
@@ -459,16 +421,29 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
             #Take the best individual after finishes each generation
             #and print their attributes
             best_ind = tools.selBest(population, 1)[0]
-            
             print(str(best_ind), best_ind.fitness.values, best_ind.dice, best_ind.params)
-            print('Best:', str(best_ind), round(best_ind.fitness.values[0],3), round(best_ind.dice,3), best_ind.params, gen)
+            print('Best:', str(best_ind), round(best_ind.fitness.values[0],3), round(best_ind.dice,3), best_ind.params, gen, delta_t)
             
             # Append the current generation statistics to the logbook
             record = stats.compile(population) if stats else {}
             logbook.record(gen=gen, nevals=no_evs, time=delta_t,
-                           best = str(best_ind), best_dice=best_ind.dice, best_params=best_ind.params,
-                           # r_2=surr_metrics["r2"], mse=surr_metrics["mse"], 
-                           # rmse=surr_metrics["rmse"], mae=surr_metrics["mae"],
+                           best = str(best_ind),
+                           best_dice=best_ind.dice,
+                           best_iou=best_ind.iou,
+                           best_hd=best_ind.hd,
+                            best_hd95=best_ind.hd95,
+                           # best_nds=best_ind.nds,
+                           best_params=best_ind.params,
                            **record)
+            
+            #For print
+            if verbose_evo:
+                print(logbook.stream)
+        
+        #Save logbook as .pkl
+        # with open(ruta + "/logbook.pkl", "wb") as log_file:
+        #     pickle.dump(logbook, log_file)
+            
         print("Time", delta_t)
+        
         return population, logbook, cache# archive, cache

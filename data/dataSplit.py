@@ -17,6 +17,33 @@ def get_ind(p:Path()):
             num=num+i  
     return int(num)
 
+def get_data_idx(train_idx, val_idx, test_idx, p):
+    p=Path(p)
+    if not os.path.exists(p):
+        raise ValueError('Debe existir el directorio')
+    
+    dirs=[x for x in p.iterdir() if x.is_dir()] #Directorios
+    dirs.sort(key=lambda d: d.name)
+    dirs=dirs[:2]##!!!
+    files_inp=list(dirs[0].glob('**/*.png')) #Images input
+    files_msk=list(dirs[1].glob('**/*.png')) #Images output
+    
+    #Ordering according to index in tittle image
+    files_inp.sort(key=get_ind)
+    files_msk.sort(key=get_ind)
+    
+    
+    train = dict(images = list(map(files_inp.__getitem__, train_idx)), 
+                 masks = list(map(files_msk.__getitem__, train_idx)))
+    
+    valid = dict(images = list(map(files_inp.__getitem__, val_idx)), 
+                 masks = list(map(files_msk.__getitem__, val_idx)))
+    
+    test = dict(images = list(map(files_inp.__getitem__, test_idx)), 
+                 masks = list(map(files_msk.__getitem__, test_idx)))
+    
+    return train, valid, test
+
 #Se toma en cuenta conjunto de entrenamiento, validación y prueba
 def get_data(train_size, val_size, test_size, p):
     p=Path(p)
@@ -28,7 +55,6 @@ def get_data(train_size, val_size, test_size, p):
     dirs=[x for x in p.iterdir() if x.is_dir()] #Directorios
     dirs.sort(key=lambda d: d.name)
     dirs=dirs[:2]##!!!
-
     files_inp=list(dirs[0].glob('**/*.png')) #Images input
     files_msk=list(dirs[1].glob('**/*.png')) #Images output
     

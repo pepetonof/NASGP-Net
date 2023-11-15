@@ -46,8 +46,9 @@ def evaluate_Segmentation(model, nepochs, lossfn, lr,
         )
     
     """Test model"""
-    dices, ious, hds = test(test_loader, model, lossfn,
-                            save_imgs=save_images, ruta=ruta, device=device, verbose=verbose_train)
+    dices, ious, hds, hds95 = test(test_loader, model,
+                                   save_imgs=save_images, ruta=ruta, 
+                                   device=device, verbose=verbose_train)
     
     metrics={}
     train_valid={}
@@ -61,5 +62,7 @@ def evaluate_Segmentation(model, nepochs, lossfn, lr,
     metrics["dices"]=dices
     metrics["ious"]=ious
     metrics["hds"]=hds
+    metrics["hds95"]=hds95
+    # metrics["nsds"]=nsd
     
     return metrics, train_valid

@@ -41,11 +41,13 @@ def save_progress(ruta, filename,
 
 #%%Save infromation of entire execution
 
-def save_execution(ruta, filename, pop, log, cache, best_model): #archive,
+def save_execution(ruta, filename, pop, log, cache, best_model, archive=None): #archive,
     cp = dict(pop=pop, log=log, 
-              # archive=archive, 
               cache=cache,
               best_model=best_model)
+    
+    if archive!=None:
+        cp["archive"]=archive
     
     with open(ruta + '/'+ filename, "wb") as cp_file:
         pickle.dump(cp, cp_file)
@@ -109,9 +111,10 @@ def saveEvolutionaryDetails(evolutionary_params, best, no_evs, time, filename):
     d.update(d_aux)
     
     with open(filename, 'w') as f: 
-        for key, value in d.items(): 
+        for key, value in d.items():
+            # f.write('%s\n', key)
+            # f.write('%s\n', value)
             f.write('%s:%s\n' % (key, value))
-    
     return
     
     

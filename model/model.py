@@ -137,7 +137,7 @@ class Blocks():
                 
         return out_channels
                 
-    def up_blocks(self, dblocks):
+    def up_blocks(self, dblocks, out_channels_classes):
         features=[]
         for i in range(len(dblocks[:-1])):
             features.append(dblocks[i].out_channels)
@@ -166,14 +166,14 @@ class Blocks():
             
         
         #Last block
-        ublocks[-1].moduleListCell[-1]=self.replace(nn.Conv2d, ublocks[-1].out_channels, 2, 1, 1)
+        ublocks[-1].moduleListCell[-1]=self.replace(nn.Conv2d, ublocks[-1].out_channels, out_channels_classes, 1, 1)
         # print(ublocks[-1], ublocks[-1].out_channels)
         
         return ublocks
     
-    def generate_cells(self, b1, num_blocks):
+    def generate_cells(self, b1, num_blocks, out_channels_classes):
         dblocks = self.down_blocks(b1, num_blocks)
-        ublocks = self.up_blocks(dblocks)
+        ublocks = self.up_blocks(dblocks, out_channels_classes)
         # print('DBLOCKS',dblocks,'\n')
         # print('UBLOCKS',ublocks)
         
@@ -190,12 +190,12 @@ class Blocks():
 
 #%%BackBone UNET
 class BackBone(nn.Module):
-    def __init__(self, first_block):
+    def __init__(self, first_block, out_channels):
         super(BackBone, self).__init__()
 
         #Blocks of backbone
         backbone = Blocks(first_block)
-        self.downs, self.bottleneck, self.ups = backbone.generate_cells(first_block, 4)
+        self.downs, self.bottleneck, self.ups = backbone.generate_cells(first_block, 4, out_channels)
 
         #Dropout of 50%
         self.dropout = nn.Dropout(p=0.5)

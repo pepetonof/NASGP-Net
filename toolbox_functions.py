@@ -9,7 +9,7 @@ import torch.optim as optim
 import numpy as np
 import pygraphviz as pgv
 import matplotlib.pyplot as plt
-import networkx as nx
+# import networkx as nx
 from deap.gp import *
 import hashlib
 # import deap.pg as pg
@@ -19,15 +19,14 @@ from model.train_valid import train_and_validate
 from model.predict import test
 from objective_functions import evaluate_NoParameters, evaluate_Segmentation
 
-def make_model(ind, in_channels, pset):
+def make_model(ind, in_channels, out_channels, pset):
     """Compile function"""
     func = compile(expr=ind, pset=pset)
     """Init module: empty sequential module"""
     init_module=[nn.ModuleList(), in_channels]
     """Output of the first block"""
     first_block=func(init_module)
-    
-    model=BackBone(first_block)
+    model=BackBone(first_block, out_channels)
     return model
     
 def evaluation(ind, nepochs, lossfn, lr,
@@ -37,14 +36,20 @@ def evaluation(ind, nepochs, lossfn, lr,
     
     # """Make model"""
     in_channels = loaders.IN_CHANNELS
-    model = make_model(ind, in_channels, pset)
+    out_channels = loaders.OUT_CHANNELS
+    model = make_model(ind, in_channels, out_channels, pset)
     
     #Evaluate Segmentation Metrics
-    metrics, train_valid = evaluate_Segmentation(model, nepochs, lossfn, lr, loaders, 
+    metrics_seg, _ = evaluate_Segmentation(model, nepochs, lossfn, lr, loaders, 
                                                  device, ruta, verbose_train)
     
-    #Evaluate segmentation performance. Use the mean dice
-    dice=np.mean(metrics["dices"])
+    # Segmentation metrics: Mean value on the test set
+    dice = np.mean(metrics_seg["dices"])
+    iou  = np.mean(metrics_seg["ious"])
+    hd   = np.mean(metrics_seg["hds"])
+    
+    hd95 = np.mean(metrics_seg["hds95"])
+    # nsd  = np.mean(metrics_seg["nsd"])
     
     #Evaluate no of parameters
     complexity, params = evaluate_NoParameters(model, loaders.IN_CHANNELS, max_params, pset)
@@ -52,7 +57,10 @@ def evaluation(ind, nepochs, lossfn, lr,
     #Fitness as lienar combination of mean dice and the number of parameters
     fit = (1 - w)*dice + w*complexity
     
-    return fit, dice, params#, metrics, train_valid, params
+    #return fit, dice, params, metrics_seg#, metrics, train_valid, params
+    # return fit, metrics_seg, params
+    return fit, dice, iou, hd, hd95, params #hd95, nds
+    
 
 def evaluationMO(ind, nepochs, lossfn, lr,
                  max_params,
@@ -160,22 +168,22 @@ def save_ind(ind, ruta, filename='tree'):
     g.draw(ruta + "/" + filename + '.png')
     return
 
-"""Shows a tree that represents an individual"""
-def plt_ind(ind):
-    tree=PrimitiveTree(ind)
-    nodes, edges, labels = graph(tree)
-    g = nx.Graph()
-    g.add_nodes_from(nodes)
-    g.add_edges_from(edges)
+# """Shows a tree that represents an individual"""
+# def plt_ind(ind):
+#     tree=PrimitiveTree(ind)
+#     nodes, edges, labels = graph(tree)
+#     g = nx.Graph()
+#     g.add_nodes_from(nodes)
+#     g.add_edges_from(edges)
     
-    pos = nx.nx_agraph.graphviz_layout(g, prog="dot")
+#     pos = nx.nx_agraph.graphviz_layout(g, prog="dot")
     
-    nx.draw_networkx_nodes(g, pos)
-    nx.draw_networkx_edges(g, pos)
-    nx.draw_networkx_labels(g, pos, labels)
-    plt.axis('off')
-    plt.show()
-    return
+#     nx.draw_networkx_nodes(g, pos)
+#     nx.draw_networkx_edges(g, pos)
+#     nx.draw_networkx_labels(g, pos, labels)
+#     plt.axis('off')
+#     plt.show()
+#     return
 
 """Shows and save graph of valid an train loss"""
 def save_graphtvd(ind, ruta, filename, show=False):

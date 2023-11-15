@@ -8,18 +8,19 @@ Created on Wed Apr 27 04:02:23 2022
 #%% Import libraries
 import os
 import torch
-import pandas as pd
+# import pandas as pd
 import numpy as np
 from torchinfo import summary
-import torch.multiprocessing as mp
+# import torch.multiprocessing as mp
 import torch.optim as optim
 from deap import tools
 from deap import creator, base
 import deap.gp as gp
-import time
+# import time
 import operator
 
 import gp_restrict
+import gp_tree
 from strongGPDataType import (moduleTorch, moduleTorchL, moduleTorchSe, moduleTorchCn, moduleTorchCt, moduleTorchP,
                               outChConv, outChSConv, kernelSizeConv, dilationRate,
                               tetha,wArithm)
@@ -28,7 +29,7 @@ from operators.functionSet import (convolution, sep_convolution,
                              se,
                              add, sub, cat,
                              maxpool, avgpool)
-from toolbox_functions import (make_model, evaluationMP, evaluation,
+from toolbox_functions import (make_model, evaluation,
                                save_ind, save_graphtv, save_graphtvd,
                                identifier)
 
@@ -39,13 +40,17 @@ from data.loader import loaders
 # from algorithm import NASGP_Net
 from algorithm_NASGPNet import eaNASGPNet
 from utils.save_utils import saveEvolutionaryDetails, saveTrainingDetails, save_execution
-from utils.deap_utils import statics_, save_statics, show_statics, functionAnalysis
+from utils.deap_utils import statics_, log2csv, functionAnalysis, show_statics
 
 import data.dataSplit as dataSplit
-import data.dataStatic as dataStatic
+# import data.dataStatic as dataStatic
+
+# from objective_functions import evaluate_Segmentation, evaluate_NoParameters
+
+# foldername='test11'
 
 #%%Pset
-pset = gp.PrimitiveSetTyped("main", [moduleTorch], moduleTorchP)
+pset = gp_tree.PrimitiveSetTyped("main", [moduleTorch], moduleTorchP)
 
 #Pooling Layer
 pset.addPrimitive(maxpool, [moduleTorchL], 
@@ -172,9 +177,9 @@ pset.renameArguments(ARG0="mod")
 #%%Creator
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax, 
-                dices=list, ious=list, hds=list,
-                # train_loss=list, valid_loss=list,
-                params=int, dice=float)
+                dice=float, iou=float, hd=float, hd95=float, 
+                #nds=float,
+                params=int)
 
 #%%Toolbox
 toolbox = base.Toolbox()
@@ -212,45 +217,47 @@ toolbox.register("save_graphtv", save_graphtv)
 
 toolbox.register("identifier", identifier, length=10)
 
+# foldername='testMultiClassHIPPOCAMPUS2'
+
 #%%GPMAIN
 def GPMain(foldername):
     """Create folder to storage"""
-    # foldername="SEA-GS-060623-COVID_SM-P0-2"
     # path='/scratch/202201016n'
-    path= "C:/Users/josef/OneDrive - Universidad Veracruzana/DIA/EEs/MO-1/Proyecto"
-    ruta=path+"/first_attemtp/"+str(foldername)
+    path= "C:/Users/josef/serverBUAP/corridas"
+    ruta=path+"/reply/"+str(foldername)
     if not os.path.exists(ruta):
         os.makedirs(ruta)
     
     #%% Data
-    # path_images='/home/202201016n/serverBUAP/datasets/images_PROMISE'
-    path_images = 'C:/Users/josef/serverBUAP/datasets/images_DRIVE'
-    in_channels=3
+    # path_images='/home/202201016n/serverBUAP/datasets/images_DHIPPO'
+    path_images = 'C:/Users/josef/serverBUAP/datasets/images_DHIPPO'
+    in_channels = 1
+    out_channels= 2
     
     """Get train, valid, test set and loaders"""
     train_set, valid_set, test_set = dataSplit.get_data(0.7, 0.15, 0.15, path_images)
     # train_set, valid_set, test_set = dataStatic.get_data(path_images)
     
-    IMAGE_HEIGHT = 256#288 
-    IMAGE_WIDTH = 256#480
+    IMAGE_HEIGHT = 64#288 
+    IMAGE_WIDTH = 64#480
     NUM_WORKERS = 0 if torch.cuda.is_available() else 0 #Also used for dataloaders
-    BATCH_SIZE = 1
+    BATCH_SIZE = 16
     
     dloaders = loaders(train_set, valid_set, test_set, batch_size=BATCH_SIZE, 
-                     image_height=IMAGE_HEIGHT, image_width=IMAGE_WIDTH, in_channels=in_channels,
-                     num_workers=NUM_WORKERS)
+                     image_height=IMAGE_HEIGHT, image_width=IMAGE_WIDTH, 
+                     in_channels=in_channels, out_channels=out_channels)
        
     #%% Evolutionary process, evo-statics and parameters
     #Evolutionary parameters
     pz = 10
-    ng = 10
+    ng = 5
     cxpb = 0.8
     mutpb = 0.19
     nelit = 1 
     tz = 7
     mstats=statics_()
     hof = tools.HallOfFame(nelit)
-    checkpoint_name = False#'checkpoint_evo.pkl'#False
+    checkpoint_name = False #'checkpoint_evo.pkl'#False
     verbose_evo=False
     max_params = 31038000
     w = 0.01
@@ -261,19 +268,16 @@ def GPMain(foldername):
     
     
     #Training_parameters
-    # num_epochs = 3
-    # alpha=0.5
-    # beta=0.4
-    # loss_fn = ComboLoss(alpha=alpha, beta=beta)
-    # lr = 0.0001
-    nepochs = 1
+    nepochs = 2
     alpha = 0.5
     beta = 0.4
-    lossfn = ComboLoss(alpha=alpha, beta=beta)
+    # lossfn = ComboLoss(alpha=alpha, beta=beta, average='micro', eps=1.0)
+    # lossfn = DiceLoss(average='macro', eps=1)
+    # lossfn = ComboLoss(alpha=alpha, beta=beta, average='micro')
+    lossfn = ComboLoss(alpha=alpha, beta=beta, average="micro", include_background=True)
     lr = 0.0001
     training_parameters = {'num_epochs':nepochs, 'loss_f':lossfn, 'learning_rate':lr}
-    verbose_train=False
-    
+    verbose_train=True
     
     toolbox.register("evaluate", evaluation, nepochs=nepochs, lossfn=lossfn, lr=lr, max_params=max_params, w=w, 
                                  loaders=dloaders, pset=pset, device="cuda:0", ruta=ruta, verbose_train=verbose_train)
@@ -282,26 +286,23 @@ def GPMain(foldername):
     #random.seed(randomSeeds)
     
     #%%Run algorithm
-    # ea = NASGP_Net(evolutionary_parameters, training_parameters,
-    #                 toolbox = toolbox, pset = pset, loaders = dloaders,
-    #                 stats = mstats, halloffame = hof, verbose_evo=False, verbose_train=False,
-    #                 checkpoint = checkpoint, ruta = ruta, foldername=foldername
-    #                 )
-    # pop, log = ea.run()
-    
-    pop, log, cache = eaNASGPNet(pop_size = pz, toolbox = toolbox, cxpb = cxpb, mutpb = mutpb, ngen = ng, nelit = nelit, 
-                           # gen_update, p, m,
-                           ruta = ruta, checkpoint_name = checkpoint_name,
-                           stats=mstats, halloffame=hof, verbose_evo=verbose_evo)
+    pop, log, cache = eaNASGPNet(pop_size = pz, toolbox = toolbox, 
+                                  cxpb = cxpb, mutpb = mutpb, 
+                                  ngen = ng, nelit = nelit, 
+                                  ruta = ruta, checkpoint_name = checkpoint_name,
+                                  stats=mstats, halloffame=hof, verbose_evo=verbose_evo)
     
     #%%Save statistics
     """Show and save Statics as .png and .csv"""
-    save_statics(log, ruta)
+    # save_statics(log, ruta)
+    log2csv(log, mstats, ruta)
     show_statics(log, ruta)
     
     #%%Best individual
     """Plot Best individual"""
     best=tools.selBest(pop,1)[0]
+    #Testing multiclass
+    # best=toolbox.individual()
     
     #%%Evo Details
     """Save details about evolutionary process"""
@@ -313,8 +314,18 @@ def GPMain(foldername):
     functionAnalysis(pop,10,pset,ruta)
     
     #%%Train again the best architecture for reliable compatarion with U-Net
+    #Parameters:
+    IMAGE_HEIGHT = 64#288 
+    IMAGE_WIDTH = 64#480
+    NUM_WORKERS = 0 if torch.cuda.is_available() else 0 #Also used for dataloaders
+    BATCH_SIZE = 2
+    
+    dloaders = loaders(train_set, valid_set, test_set, batch_size=BATCH_SIZE, 
+                     image_height=IMAGE_HEIGHT, image_width=IMAGE_WIDTH, 
+                     in_channels=in_channels, out_channels = out_channels)
+    
     best_model=toolbox.clone(best)
-    model=toolbox.make_model(best_model, in_channels=in_channels)
+    model=toolbox.make_model(best_model, in_channels, out_channels)
     
     """Train, val and test loaders"""
     train_loader, _= dloaders.get_train_loader()
@@ -325,7 +336,7 @@ def GPMain(foldername):
     optimizer = optim.Adam(model.parameters(), lr=lr)
     
     """Epocas de re-entrenamiento"""
-    nepochs=5
+    nepochs=10
     
     """Device"""
     device='cuda:0'
@@ -335,44 +346,58 @@ def GPMain(foldername):
     save_images_flag=True
     load_model=False
     
+    """Print the process during training"""
+    verbose_train=True
+    
     #%%Train, validate and test
     """Train and valid model"""
     train_loss, valid_loss, train_dice, valid_dice = train_and_validate(
         model, train_loader, val_loader,
         nepochs, optimizer, lossfn,
         device, load_model, save_model_flag,
-        ruta=ruta, verbose=True
+        ruta=ruta, verbose=verbose_train,
         )
     
     """Test model"""
-    dices, ious, hds = test(test_loader, model, lossfn,
+    dices, ious, hds, hds95 = test(test_loader, model,
                             save_imgs=save_images_flag, ruta=ruta, device=device, verbose=True)
     
-    #%%Attributes assigned
-    # best_model=toolbox.clone(best)
     params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    
+    #%%Assign attributes
     best_model.fitness.values = (1 - w)*np.mean(dices) + w*((max_params - params)/max_params),
+    
+    #Average metrics
     best_model.dice = np.mean(dices)
+    best_model.iou = np.mean(ious)
+    best_model.hd = np.mean(hds)
+    best_model.hd95 = np.mean(hds95)
+    # best_model.nsd = np.mean(nsds)
+    best_model.params = np.mean(params)
+    
+    #Metrics on each element in the batch
+    best_model.dices = dices
+    best_model.ious = ious
+    best_model.hds = hds
+    best_model.hd95 = hds95
+    # best_model.nsd = nsds
     best_model.params = params
     
+    #loss and dice during training and validation
     best_model.train_loss = train_loss
     best_model.valid_loss = valid_loss
     best_model.train_dice = train_dice
     best_model.valid_dice = valid_dice
     
-    best_model.dices = dices
-    best_model.ious = ious
-    best_model.hds = hds
+    #%%Dice and Loss Graphs of training and validation
+    # """Coloca y guarda la gráfica de entrenamiento del mejor individuo"""
+    # toolbox.save_graphtv(best_model, ruta=ruta, filename='ReTrainValidationLoss')
+    # toolbox.save_graphtvd(best_model, ruta=ruta, filename='ReTrainValidationDice')
     
-    #%%Dice and Loss Graphs of training
-    """Coloca y guarda la gráfica de entrenamiento del mejor individuo"""
-    toolbox.save_graphtv(best_model, ruta=ruta, filename='ReTrainValidationLoss')
-    toolbox.save_graphtvd(best_model, ruta=ruta, filename='ReTrainValidationDice')
-    
-    #%%NNo. parameters
+    #%%No. parameters and Summary
     """No of parameters"""
     model = model.to(device)
-    model_stats=summary(model, (1, in_channels, 256, 256), verbose=0)
+    model_stats=summary(model, (1, in_channels, IMAGE_HEIGHT, IMAGE_WIDTH), verbose=0)
     summary_model = str(model_stats)
     
     #%%Retrain Details
@@ -380,38 +405,13 @@ def GPMain(foldername):
                         best_model, summary_model,
                         filename=ruta+'/Retrain_best_details.txt')
     
+    #%%Save execution: pop., log, cache, best model as .pkl file
     save_execution(ruta, foldername+'.pkl', pop, log, cache, best_model)
     
     del model
     
     return log, pop, best_model
-
-#%%DataFrame for Statistical Test
-def make_table(results):
-    inds = [str(b[2]) for b in results]
-    fitness=[float(b[2].fitness.values[0]) for b in results]
-    dices=[b[2].dice for b in results]
-    params=[b[2].params for b in results]
-    dict={"Arbol":inds, "Fitness":fitness, "Dice":dices, "Params":params}
-    daf=pd.DataFrame.from_dict(dict)
-    daf.to_csv('/scratch/202201016n/corridas/'+'observaciones.csv')
     
-
-#%% N-Corridas
-def n_runs(rango=(1,2)):
-    name='NASGP-Net'
-    results=[]
-    for i in range(rango[0], rango[1]):
-        print('Run', i)
-        log, pop, best = GPMain(name+str(i))
-        print(best, best.fitness, best.dice, best.params)
-        results.append([log, pop, best])
-    return results
-    
-
 if __name__=='__main__':
     # mp.set_start_method('forkserver')
-    log, pop, best = GPMain('NASGP-Net0')
-    
-#    results=n_runs(rango=(4,5))
-#    make_table(results)
+    log, pop, best = GPMain('MSD-Hippo-MicroTrue')

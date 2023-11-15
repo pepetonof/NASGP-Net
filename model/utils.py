@@ -11,7 +11,7 @@ def load_checkpoint(checkpoint, model):
     return
 
 def save_model(model, optimizer, ruta):
-    print('=> Saving model...\t')
+    # print('=> Saving model...\t')
     checkpoint = {
         "state_dict": model.state_dict(),
         "optimizer" : optimizer.state_dict(),
@@ -22,6 +22,6 @@ def save_model(model, optimizer, ruta):
     return
 
 def load_model(model, ruta, filename):
-    print('=> Loading model...\t')
+    # print('=> Loading model...\t')
     load_checkpoint(ruta+'/'+filename, model)
     return
