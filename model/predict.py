@@ -9,15 +9,14 @@ import torch.nn.functional as F
 from torchvision.utils import draw_segmentation_masks
 import torchvision
 import numpy as np
+import os
 from tqdm import tqdm
 from PIL import Image, ImageFont, ImageDraw
 import torchvision.transforms.functional as TF
 # import torchvision.transforms.functionalJ as TF
 import matplotlib.pyplot as plt
 import copy
-
-from model.loss_f import hdistance_loss
-from model.metrics import dice_score, iou_score
+from torchvision.utils import make_grid
 from collections import defaultdict
 
 class MetricMonitor:
@@ -45,34 +44,24 @@ class MetricMonitor:
             ]
         )
 
-
 class imgs():
     def __init__(self, im, gt, pr, dice, iou, hd):
-        im=im.squeeze()
-        im=im.cpu().detach().numpy()
-        if len(im.shape)==2:
-          im=np.stack((im,im,im),axis=0) 
-        self.im=np.transpose(im, (1,2,0))
-        
-        gt=gt.squeeze()
-        gt=gt.cpu().detach().numpy()
-        self.gt=np.transpose(gt, (1,2,0))
-        
-        pr=pr.squeeze()
-        pr=pr.cpu().detach().numpy()
-        self.pr=np.transpose(pr, (1,2,0))
+        self.im = im
+        self.gt = gt
+        self.pr = pr
         
         self.dice=dice
         self.iou=iou
         self.hd=hd
 
 
-
-def test(test_loader, model,
-         save_imgs=False, ruta="saved_images/", device="cuda", verbose=False):
+def test(test_loader, model, metrics,
+         save_imgs=False, ruta="saved_images/", 
+         device="cuda", verbose=False):
     
     model = model.to(device)
     
+    """Verbose"""
     metric_monitor=MetricMonitor()
     model.eval()
     if verbose:
@@ -81,17 +70,17 @@ def test(test_loader, model,
         stream = test_loader
     
     """Metrics to compare"""
-    dices= []
-    ious = []
-    hds  = []
-    hds95= []
+    metricsTest = {}
+    for m in metrics:
+        key=str(type(m)).strip('>').strip("'").split('.')[-1]
+        metricsTest[key]=[]
+        if key == 'HDMetric':
+            metricsTest[key+'95']=[]
     # nsds = []
     
     """For save  three best predictions"""
     objs=[]
     
-    # if save_imgs:
-    #     print('=> Saving images...')
     
     with torch.no_grad():
     
@@ -101,131 +90,88 @@ def test(test_loader, model,
             preds = model(x)
         
             #Takes each region of interest
-            # pbool = F.softmax(preds, dim=1)
             pred_soft = F.softmax(preds, dim=1)
             
             if pred_soft.shape[1:]!=y.shape[1:]:
                 pred_soft = TF.resize(pred_soft, size=y.shape[1:])
             
-            # sem_classes=['__background__', 'placenta']
-            sem_classes=['__background__'] + ["roi" + str(i) for i in range(1,preds.shape[1])]
-            sem_class_to_idx={cls:idx for (idx, cls) in enumerate(sem_classes)} 
-            
-            # print("\nMask-", torch.unique(y), y.shape)
-            # print("PredShape", pred_soft.shape)
-            # print("Pred-",)
-            
-            #For each class
-            y_roi = []
-            pred_roi = []
-            for key in list(sem_class_to_idx.keys())[1:]:
-                # class_dim = sem_class_to_idx[key]
-                pbool = pred_soft.argmax(1) == sem_class_to_idx[key]
-                ybool = y ==sem_class_to_idx[key]
-                
-                # print("Pbool Shape:\n", pbool.shape, key)
-                # print("Ybool Shape:\n", ybool.shape, key)
-                
-                pred_roi.append(pbool.unsqueeze(dim=1))
-                y_roi.append(ybool.unsqueeze(dim=1))
-                
-            pred_roi = torch.cat(pred_roi, dim=1)
-            y_roi = torch.cat(y_roi, dim=1)
-            # print("Pred_ROI", pred_roi.shape, torch.unique(pred_roi))
-            # print("Y_ROI", y_roi.shape, torch.unique(y_roi))
-            
-            # class_dim=1
-            # pbool = pbool.argmax(class_dim) == sem_class_to_idx['placenta']
-            
-            # if pbool.shape[1:]!=y.shape[1:]:
-            #     pbool = TF.resize(pbool, size=y.shape[1:])
-            
             """Metrics for evaluation"""
-            #Dice coefficient
-            # dice = dice_loss(preds, y)
-            # dice = 1-dice
-            # dice = dice.detach().item()
-            dice = dice_score(preds, y)
-            # print("\nDiceScore:\t", dice)
-            dices.append(dice) #Append to dices
+            for m in metrics:
+                key=str(type(m)).strip('>').strip("'").split('.')[-1]
+                score = m(pred_soft, y)
+                if key == 'HDMetric':  
+                    metricsTest[key].append(score[0])
+                    metricsTest[key+'95'].append(score[1])
+                else:
+                    metricsTest[key].append(score)
             
-            ##Loss function
-            # loss=loss_fn(preds, y)
-            
-            # """Monitor Loss for Test Set Validation"""
-            # metric_monitor2.update("Loss:", loss)
-            # stream.set_description("Testing. {metric_monitor}".format(metric_monitor=metric_monitor2))
-        
-            #IoU
-            # iou = IoU_loss(preds, y)
-            # iou = 1-iou
-            # iou =iou.detach().item()
-            iou = iou_score(preds, y)
-            ious.append(iou)#Append to ious
-            
-            #Hausdorff Distance
-            hd, hd95 = hdistance_loss(preds, y)
-            hds.append(hd)
-            hds95.append(hd95)
-            
-            #NSD
-            # nsd = nsdf(preds, y)
-            # nsds.append(nsd)
-            
+            """Metrics for evaluation"""            
             if save_imgs:
-                #Save each image
-                #Save original image
-                torchvision.utils.save_image(x, f"{ruta}/{idx}_in.png")
+                # path_imgs=ruta+"/test_segmentation"
+                path_imgs = f"{ruta}/test_segmentation"
+                if not os.path.exists(path_imgs):
+                    os.makedirs(path_imgs)
+                
+                sem_classes=['__background__'] + ["roi" + str(i) for i in range(1,preds.shape[1])]
+                sem_class_to_idx={cls:idx for (idx, cls) in enumerate(sem_classes)} 
+
+                #For each class
+                y_roi = []
+                pred_roi = []
+                for key in list(sem_class_to_idx.keys())[1:]:
+                    # class_dim = sem_class_to_idx[key]
+                    pbool = pred_soft.argmax(1) == sem_class_to_idx[key]
+                    ybool = y ==sem_class_to_idx[key]
+                    
+                    pred_roi.append(pbool.unsqueeze(dim=1))
+                    y_roi.append(ybool.unsqueeze(dim=1))
+                    
+                pred_roi = torch.cat(pred_roi, dim=1)
+                y_roi = torch.cat(y_roi, dim=1)
+                # print("Pred_ROI", pred_roi.shape, torch.unique(pred_roi))
+                # print("Y_ROI", y_roi.shape, torch.unique(y_roi))
+                
                 #Obtain original images with masks and predictions on top
-                # over_masks, over_preds = overlay_imgs(x, y, pbool)
                 over_masks, over_preds = overlay_imgs(x, y_roi, pred_roi)
                 
+                #Save original image
+                torchvision.utils.save_image(x, f"{path_imgs}/{idx}_input.png")
+                over_masks = (over_masks.float())/255.00
+                torchvision.utils.save_image(over_masks, f"{path_imgs}/{idx}_overmask.png")
+                
                 #Set dice index to the over_preds
-                # over_preds=set_title(over_preds, 'Dice='+str(round(dice,6)))
+                dice = metricsTest['DiceMetric'][-1]
+                over_preds=set_title(over_preds, 'Dice='+str(round(dice,3)))
                 
                 #For save with torch.utils.save_image()
-                over_masks = (over_masks.float())/255.00
                 over_preds = (over_preds.float())/255.00
-                # print(preds.shape)
-                # print(over_masks.shape,over_preds.shape)
-                
-                torchvision.utils.save_image(over_masks, f"{ruta}/{idx}_overmask.png")
-                torchvision.utils.save_image(over_preds, f"{ruta}/{idx}_overprd_dice={round(dice,3)}.png")
+                torchvision.utils.save_image(over_preds, f"{path_imgs}/{idx}_overpred_dice={round(dice,3)}.png")
             
                 #Save grid of the three best/worst individuals
+                iou = metricsTest['IoUMetric'][-1]
+                hd = metricsTest['HDMetric95'][-1]
                 obj_best=imgs(x, over_masks, over_preds, dice, iou, hd)
                 objs.append(obj_best)
             
             if verbose:
                 """Monitor Dice for Test Set Validation"""
+                dice = metricsTest['DiceMetric'][-1]
                 metric_monitor.update("dice", dice)#loss.item())
                 stream.set_description("Testing \t\t\t{metric_monitor}".format(metric_monitor=metric_monitor))
 
             #For saving memory
             del x, y, preds
             torch.cuda.empty_cache()
-        
-    # if verbose:
-    #     """Monitor Dice for Test Set Validation"""
-    #     metric_monitor.update("dice", dice)#loss.item())
-    #     print(metric_monitor)
-    #     stream.set_description("Testing. \t\t{metric_monitor}".format(metric_monitor=dice))
     
     #Save grid of the three best/worst individual
     if save_imgs:
-        save_grid(objs, 3, 'best', ruta)
-        save_grid(objs, 3, 'worst', ruta)
-    
-    # if verbose:        
-    #     print(f"Got Dice score mean:\t {np.mean(dices):.8f}")
-    #     print(f"Got Dice score max:\t {np.max(dices):.8f}")
-    #     print(f"Got Dice score min:\t {np.min(dices):.8f}")
-    #     print(f"Got Dice score std:\t {np.std(dices):.8f}")
+        save_grid(objs, 3, 'best', f"{path_imgs}/best_seg.png")
+        save_grid(objs, 3, 'worst', f"{path_imgs}/worst_seg.png")
     
     model.train()
     model=model.cpu()
     
-    return dices, ious, hds, hds95 #, nsds
+    return metricsTest
 
 def overlay_imgs(inputs, masks, preds, alpha=0.4):
     #Lists to concatenate and recover a batch
@@ -234,7 +180,7 @@ def overlay_imgs(inputs, masks, preds, alpha=0.4):
     
     colors_mask = {"green":(0,255,0),
                    "blue":(0,0,255)} 
-    colors_pred = {"yellow":(255,255,0),
+    colors_pred = {"magenta":(255,0,255),
                    "cyan":(0,255,255),} 
     
     
@@ -272,11 +218,6 @@ def overlay_imgs(inputs, masks, preds, alpha=0.4):
             # print("PredChannel",pred.shape, torch.unique(pred), pred.dtype)
             # print("MaskChannel",mask.shape, torch.unique(mask), mask.dtype)
             
-            # img_and_mask=draw_segmentation_masks(image=img_inp, masks=mask, 
-            #                                       alpha=alpha, colors=(0,255,0))
-            # img_and_pred=draw_segmentation_masks(image=img_pred, masks=pred, 
-            #                                       alpha=alpha, colors=(255,0,255))
-            
             img_and_mask=draw_segmentation_masks(image=img_inp, masks=mask, 
                                                   alpha=alpha, colors=colors_mask[_kcm])
             img_and_pred=draw_segmentation_masks(image=img_pred, masks=pred, 
@@ -290,20 +231,6 @@ def overlay_imgs(inputs, masks, preds, alpha=0.4):
         lst_masks.append(img_and_mask.unsqueeze(dim=0))
         lst_preds.append(img_and_pred.unsqueeze(dim=0))
             
-            # print("OverMask-Pred2", img_and_mask.shape, img_and_pred.shape)
-        # img=inputs[b]*255
-        # img=img.type(torch.uint8)
-        
-        # mask=masks[b].type(torch.bool)
-        # pred=preds[b]
-        
-        # img_and_mask=draw_segmentation_masks(image=img, masks=mask, 
-        #                                       alpha=alpha, colors=(0,255,0))
-        # img_and_pred=draw_segmentation_masks(image=img, masks=pred, 
-        #                                       alpha=alpha, colors=(255,0,255))
-        # #print('Test',img.shape, img.dtype, pred.shape, pred.dtype, img_and_pred.shape, img_and_pred.dtype, torch.max(pred), torch.min(pred))
-        # lst_masks.append(img_and_mask.unsqueeze(dim=0))
-        # lst_preds.append(img_and_pred.unsqueeze(dim=0))
     
     #Recover a tensor BxCxHxW
     tensor_masks=torch.cat(lst_masks, dim=0)
@@ -316,34 +243,16 @@ def overlay_imgs(inputs, masks, preds, alpha=0.4):
     return tensor_masks, tensor_preds
 
 def set_title(tensor,string):
-    tensor=tensor.squeeze()
-    numpy=tensor.cpu().detach().numpy()
-    numpy=np.transpose(numpy, (1,2,0))
-    pil_image=Image.fromarray(numpy)    
-    
-    
-    font=ImageFont.truetype('Arial.ttf',12)
+    font=ImageFont.truetype('C:/Users/josef/OneDrive - Universidad Veracruzana/DIA/NASGP-Net/code/Arial.ttf',11)
     # font=ImageFont.truetype(r'/home/202201016n/serverBUAP/NASGP-Net/Arial.ttf', 12)
-    # font=ImageFont.truetype(r'/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf', 25)
-    
-    w, h = font.getsize(string)
-    draw=ImageDraw.Draw(pil_image)
-    wim, him = pil_image.size
-    draw.text(((wim-w)/2, 15*(him-h)/16), string, font=font, fill='blue')
-    numpy=np.array(pil_image)
-    numpy=np.transpose(numpy, (2,0,1))
-    tensor=torch.from_numpy(numpy)
-    tensor=tensor.unsqueeze(dim=0) 
-    
-    return tensor
-
-def set_title2(tensor,string):
-    # font=ImageFont.truetype(r'/home/202201016n/serverBUAP/NASGP-Net/Arial.ttf', 12)
-    font=ImageFont.truetype('Arial.ttf',12)
+    # font=ImageFont.truetype('Arial.ttf',12)
     w, h = font.getsize(string)
     out_tensor=[]
+    # print(tensor.shape)
     for i in range(tensor.shape[0]):
         t=tensor[i]
+        
+        # print(t.shape)
         numpy=t.cpu().detach().numpy()
         numpy=np.transpose(numpy, (1,2,0))
         pil_image=Image.fromarray(numpy)    
@@ -352,13 +261,17 @@ def set_title2(tensor,string):
         wim, him = pil_image.size
         draw.text(((wim-w)/2, 15*(him-h)/16), string, font=font, fill='blue')
         numpy=np.array(pil_image)
+        # print(numpy.shape)
         
         numpy=np.transpose(numpy, (2,0,1))
         t=torch.from_numpy(numpy)
-        t=tensor.unsqueeze(dim=0)
+        # print(t.shape)
+        t=torch.unsqueeze(t, dim=0)#tensor.unsqueeze(dim=)
+        # print(t.shape)
         out_tensor.append(t)
-    # out_tensor=torch.cat(out_tensor, dim=0)
+    out_tensor=torch.cat(out_tensor, dim=0)
     # print(out_tensor.shape)
+    
     return out_tensor
 
 def save_grid(objs, num, option, ruta):
@@ -369,21 +282,23 @@ def save_grid(objs, num, option, ruta):
         lstWorst=sorted(objs, key = lambda x: x.dice)
         bests=lstWorst[:num]
         bests.reverse()
-    figure, ax = plt.subplots(nrows=num, ncols=3, figsize=(10,10))
-    
-    for i, best in enumerate(bests):
-        ax[i,0].imshow(best.im)
-        ax[i,1].imshow(best.gt)
-        ax[i,2].imshow(best.pr)
         
-        ax[i,0].set_title("Image " + option + " " +str(i+1))
-        ax[i,1].set_title("Ground " + option + " " + str(i+1))
-        ax[i,2].set_title("Predicted " + option + " " +str(i+1))
+    figure, ax = plt.subplots(nrows=num, ncols=3)
+    for i, obj in enumerate(bests):
+        grid_im=make_grid(obj.im)
+        grid_gt=make_grid(obj.gt)
+        grid_pr=make_grid(obj.pr)
+        # print(grid_im.shape, grid_gt.shape, grid_pr.shape)
+        
+        ax[i,0].imshow(np.transpose(grid_im.cpu().detach().numpy(), (1,2,0)))
+        ax[i,1].imshow(np.transpose(grid_gt.cpu().detach().numpy(), (1,2,0)))
+        ax[i,2].imshow(np.transpose(grid_pr.cpu().detach().numpy(), (1,2,0)))
         
         ax[i, 0].set_axis_off()
         ax[i, 1].set_axis_off()
         ax[i, 2].set_axis_off()
     
-    plt.savefig(ruta+"/Three Segmentations_"+option+".png", bbox_inches='tight')
+    plt.savefig(ruta, bbox_inches='tight', dpi=600)
     plt.close(figure)
     plt.show()
+    

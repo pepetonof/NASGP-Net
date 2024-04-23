@@ -91,14 +91,17 @@ def assign_attributes(_ind, key, cache, toolbox, surrogate=None):
         # if surrogate == None:
         fit = toolbox.evaluate(_ind)
         _ind.fitness.values = fit[0],
-        _ind.dice = fit[1]
-        _ind.iou = fit[2]
-        _ind.hd = fit[3]
-        _ind.hd95 = fit[4]
-        # _ind.nsd = fit[5]
-        _ind.params = fit[5]
         
-        print('Syntax tree:\t', str(_ind), round(_ind.fitness.values[0], 3), round(_ind.dice,3), _ind.params, "\t in original")
+        _ind.dice_t= fit[1]
+        _ind.dice = fit [2]
+        
+        _ind.iou = fit[3]
+        _ind.hd = fit[4]
+        _ind.hd95 = fit[5]
+        
+        _ind.params = fit[6]
+        
+        print('Syntax tree hola:\t', str(_ind), round(_ind.fitness.values[0], 3), round(_ind.dice,3), _ind.params, "\t in original")
             
         # #Assign attributes from the surrogate model
         # else:
@@ -157,7 +160,7 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
                           'best_iou',
                           'best_hd',
                           'best_hd95',
-                          # 'best_nds',
+                          'best_nsd',
                           'best_params'] + (stats.fields if stats else [])
         offspring = []
         elitism_inds = []
@@ -184,11 +187,12 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
             if key in cache:
                 #Assign attributes from cache
                 ind.fitness.values = cache[key].fitness.values
+                # ind.dice_t = cache[key].dice_t
                 ind.dice = cache[key].dice
                 ind.iou = cache[key].iou
-                ind.hd95 = cache[key].hd
-                ind.hd = cache[key].hd95
-                # _ind.nsd = cache[key].nsd
+                ind.hd95 = cache[key].hd95
+                ind.hd = cache[key].hd
+                ind.nsd = cache[key].nsd
                 ind.params = cache[key].params
                         
                 print('Syntax tree:\t', str(ind), round(ind.fitness.values[0],3), round(ind.dice,3), ind.params, "\t in cache")
@@ -198,12 +202,16 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
                 # if surrogate == None:
                 fit = toolbox.evaluate(ind)
                 ind.fitness.values = fit[0],
-                ind.dice = fit[1]
+                
+                # ind.dice_t= fit[1]
+                ind.dice = fit [1]
+                
                 ind.iou = fit[2]
                 ind.hd = fit[3]
                 ind.hd95 = fit[4]
-                # _ind.nsd = fit[5]
-                ind.params = fit[5]
+                ind.nsd = fit[5]
+                
+                ind.params = fit[6]
                 
                 #Add to cache
                 cache[key]=ind
@@ -213,15 +221,6 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
                 no_evs+=1
                 
                 print('Syntax tree:\t', str(ind), round(ind.fitness.values[0], 3), round(ind.dice,3), ind.params, "\t in original")
-            
-            # #Add to cache when original objective function is used
-            # if key not in cache:
-            #     #Add to cache
-            #     cache[key]=ind
-                
-            #     ####Increment the number of evaluations when original objective function is used
-            #     ####and key is not in cache
-            #     no_evs+=1
                 
             ####Increment the number of evaluated individuals from invalid ind
             idx+=1
@@ -252,7 +251,7 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
                        best_iou=best_ind.iou,
                        best_hd=best_ind.hd,
                        best_hd95=best_ind.hd95,
-                       # best_nds=best_ind.nds,
+                       best_nsd=best_ind.nsd,
                        best_params=best_ind.params,
                        **record)
         
@@ -339,11 +338,12 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
                 if key in cache:
                     #Assign attributes from cache
                     ind.fitness.values = cache[key].fitness.values
+                    # ind.dice_t = cache[key].dice_t
                     ind.dice = cache[key].dice
                     ind.iou = cache[key].iou
                     ind.hd95 = cache[key].hd
                     ind.hd = cache[key].hd95
-                    # _ind.nsd = cache[key].nsd
+                    ind.nsd = cache[key].nsd
                     ind.params = cache[key].params
                             
                     print('Syntax tree:\t', str(ind), round(ind.fitness.values[0],3), round(ind.dice,3), ind.params, "\t in cache")
@@ -353,12 +353,16 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
                     # if surrogate == None:
                     fit = toolbox.evaluate(ind)
                     ind.fitness.values = fit[0],
-                    ind.dice = fit[1]
+                    
+                    # ind.dice_t= fit[1]
+                    ind.dice = fit [1]
+                    
                     ind.iou = fit[2]
                     ind.hd = fit[3]
                     ind.hd95 = fit[4]
-                    # _ind.nsd = fit[5]
-                    ind.params = fit[5]
+                    ind.nsd = fit[5]
+                    
+                    ind.params = fit[6]
                     
                     #Add to cache
                     cache[key]=ind
@@ -368,16 +372,6 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
                     no_evs+=1
                     
                     print('Syntax tree:\t', str(ind), round(ind.fitness.values[0], 3), round(ind.dice,3), ind.params, "\t in original")
-                
-                
-                # #Add to cache when original objective function is used
-                # if key not in cache:
-                #     #Add to cache
-                #     cache[key]=ind
-                    
-                #     ####Increment the number of evaluations when original objective function is used
-                #     ####and key is not in cache
-                #     no_evs+=1
                 
                 ####Increment the number of evaluated individuals from invalid ind
                 idx+=1
@@ -421,7 +415,7 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
             #Take the best individual after finishes each generation
             #and print their attributes
             best_ind = tools.selBest(population, 1)[0]
-            print(str(best_ind), best_ind.fitness.values, best_ind.dice, best_ind.params)
+            # print(str(best_ind), best_ind.fitness.values, best_ind.dice, best_ind.params)
             print('Best:', str(best_ind), round(best_ind.fitness.values[0],3), round(best_ind.dice,3), best_ind.params, gen, delta_t)
             
             # Append the current generation statistics to the logbook
@@ -431,18 +425,14 @@ def eaNASGPNet(pop_size, toolbox, cxpb, mutpb, ngen, nelit,
                            best_dice=best_ind.dice,
                            best_iou=best_ind.iou,
                            best_hd=best_ind.hd,
-                            best_hd95=best_ind.hd95,
-                           # best_nds=best_ind.nds,
+                           best_hd95=best_ind.hd95,
+                           best_nsd=best_ind.nsd,
                            best_params=best_ind.params,
                            **record)
             
             #For print
             if verbose_evo:
                 print(logbook.stream)
-        
-        #Save logbook as .pkl
-        # with open(ruta + "/logbook.pkl", "wb") as log_file:
-        #     pickle.dump(logbook, log_file)
             
         print("Time", delta_t)
         

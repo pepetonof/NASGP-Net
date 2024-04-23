@@ -10,59 +10,35 @@ from model.train_valid import train_and_validate
 from model.predict import test
 
 #Version of evaluate for surrogate model
-def evaluate_NoParameters(model, in_channels, max_params, pset):
+def evaluate_NoParameters(model, max_params):
     """Make model"""
     # model = make_model(ind, in_channels, pset)
     params=sum(p.numel() for p in model.parameters() if p.requires_grad)
     
     return (max_params - params)/max_params, params
 
-def evaluate_Segmentation(model, nepochs, lossfn, lr, 
-                          loaders, device, ruta, verbose_train):
+def evaluate_Segmentation(model, num_epochs, tolerance, loss_fn, metrics, lr, 
+                          loaders, device, ruta, verbose_train,
+                          save_model, save_images, fold=None):
     
     """Train, val and test loaders"""
     train_loader, _ = loaders.get_train_loader() #loaders.get_train_loader(288, 480)
     val_loader, _  = loaders.get_val_loader()
     test_loader, _ = loaders.get_test_loader()
     
-    # """Make model"""
-    # in_channels = loaders.IN_CHANNELS
-    # model = make_model(ind, in_channels, pset)
-    
     """Hyoperparameters for train"""
-    LOAD_MODEL = False
     optimizer = optim.Adam(model.parameters(), lr = lr)
     
-    """Save model and images"""
-    save_model=False
-    save_images=False
-    
     """Train and valid model"""
-    train_loss, valid_loss, train_dice, valid_dice = train_and_validate(
-        model, train_loader, val_loader,
-        nepochs, optimizer, lossfn,
-        device, LOAD_MODEL, save_model,
-        ruta=ruta, verbose=verbose_train
-        )
-    
+    lossAndDice, metricsVal = train_and_validate(model, train_loader, val_loader,
+                                                 num_epochs, tolerance,
+                                                 optimizer, loss_fn, metrics,
+                                                 device, save_model, save_images,
+                                                 ruta=ruta, verbose=verbose_train, fold=fold)
+                                                
     """Test model"""
-    dices, ious, hds, hds95 = test(test_loader, model,
-                                   save_imgs=save_images, ruta=ruta, 
-                                   device=device, verbose=verbose_train)
+    metricsTest = test(test_loader, model, metrics,
+                       save_imgs=save_images, ruta=ruta, 
+                       device=device, verbose=verbose_train)
     
-    metrics={}
-    train_valid={}
-    
-    train_valid["train_loss"]=train_loss
-    train_valid["valid_loss"]=valid_loss
-    train_valid["train_dice"]=train_dice
-    train_valid["valid_dice"]=valid_dice
-    
-    #List of the metric reached on each image in the test dataset
-    metrics["dices"]=dices
-    metrics["ious"]=ious
-    metrics["hds"]=hds
-    metrics["hds95"]=hds95
-    # metrics["nsds"]=nsd
-    
-    return metrics, train_valid
+    return metricsTest, metricsVal, lossAndDice

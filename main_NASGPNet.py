@@ -7,16 +7,9 @@ Created on Wed Apr 27 04:02:23 2022
 
 #%% Import libraries
 import os
-import torch
-# import pandas as pd
-import numpy as np
-from torchinfo import summary
-# import torch.multiprocessing as mp
-import torch.optim as optim
 from deap import tools
 from deap import creator, base
 import deap.gp as gp
-# import time
 import operator
 
 import gp_restrict
@@ -29,25 +22,22 @@ from operators.functionSet import (convolution, sep_convolution,
                              se,
                              add, sub, cat,
                              maxpool, avgpool)
-from toolbox_functions import (make_model, evaluation,
+from toolbox_functions import (make_model, evaluation, evaluation_cv,
                                save_ind, save_graphtv, save_graphtvd,
                                identifier)
 
-from model.loss_f import ComboLoss
-from model.train_valid import train_and_validate
-from model.predict import test
-from data.loader import loaders
-# from algorithm import NASGP_Net
+# from model.loss_f import ComboLoss
+from losses.loss_functions import DiceLoss
+
 from algorithm_NASGPNet import eaNASGPNet
-from utils.save_utils import saveEvolutionaryDetails, saveTrainingDetails, save_execution
+from utils.save_utils import saveEvolutionaryDetails, save_execution
 from utils.deap_utils import statics_, log2csv, functionAnalysis, show_statics
 
 import data.dataSplit as dataSplit
-# import data.dataStatic as dataStatic
+import data.dataStatic as dataStatic
 
-# from objective_functions import evaluate_Segmentation, evaluate_NoParameters
-
-# foldername='test11'
+from data.dataset import Dataset2D#, Dataset3D22D, Dataset3D
+from metrics.segmentation_metrics import DiceMetric, IoUMetric, HDMetric, NSDMetric
 
 #%%Pset
 pset = gp_tree.PrimitiveSetTyped("main", [moduleTorch], moduleTorchP)
@@ -104,7 +94,7 @@ pset.addPrimitive(sub, [moduleTorchCn, wArithm, moduleTorchCn, wArithm],
 pset.addPrimitive(cat, [moduleTorchCn, moduleTorchCn], 
                   moduleTorchCt, name='cat')
 
-#Se,Se; Se,Cn; Cn,Se;
+# Se,Se; Se,L; L,Se;
 pset.addPrimitive(add, [moduleTorchSe, wArithm, moduleTorchSe, wArithm], 
                   moduleTorchCt, name='add')
 pset.addPrimitive(sub, [moduleTorchSe, wArithm, moduleTorchSe, wArithm], 
@@ -147,7 +137,7 @@ pset.addPrimitive(se, [moduleTorchL],
 pset.addPrimitive(se, [moduleTorchCn],
                   moduleTorchSe, name='se')
 
-# #Feature Connection Layer Optional
+#Feature Connection Layer Optional
 pset.addPrimitive(dense_connection, [moduleTorchL, tetha],#, kernelSizeConv, kernelSizeConv
                   moduleTorchCn, name='dCon')
 pset.addPrimitive(res_connection, [moduleTorchL],
@@ -178,7 +168,6 @@ pset.renameArguments(ARG0="mod")
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax, 
                 dice=float, iou=float, hd=float, hd95=float, 
-                #nds=float,
                 params=int)
 
 #%%Toolbox
@@ -189,10 +178,8 @@ toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
 
 toolbox.register('make_model', make_model, pset=pset)
-# toolbox.register('evaluationMP', evaluationMP, loaders=loaders, pset=pset)
-# toolbox.register('evaluate', evaluationMP, loaders=loaders, pset=pset)
 
-toolbox.register("select", tools.selTournament, tournsize=3)
+# toolbox.register("select", tools.selTournament, tournsize=3)
 toolbox.register("selectElitism", tools.selBest)
 
 toolbox.register("mate", gp.cxOnePointLeafBiased, termpb=0.1)
@@ -217,73 +204,123 @@ toolbox.register("save_graphtv", save_graphtv)
 
 toolbox.register("identifier", identifier, length=10)
 
-# foldername='testMultiClassHIPPOCAMPUS2'
+# foldername='test'
 
 #%%GPMAIN
 def GPMain(foldername):
     """Create folder to storage"""
     # path='/scratch/202201016n'
     path= "C:/Users/josef/serverBUAP/corridas"
-    ruta=path+"/reply/"+str(foldername)
+    ruta=path+"/cross_validation/"+str(foldername)
     if not os.path.exists(ruta):
         os.makedirs(ruta)
     
     #%% Data
     # path_images='/home/202201016n/serverBUAP/datasets/images_DHIPPO'
-    path_images = 'C:/Users/josef/serverBUAP/datasets/images_DHIPPO'
+    # path_images = 'C:/Users/josef/serverBUAP/datasets/images_ISIC'
+    path_images = "C:/Users/josef/OneDrive - Universidad Veracruzana/DIA/NASGP-Net/comparison-datasets/folds"
     in_channels = 1
-    out_channels= 2
-    
-    """Get train, valid, test set and loaders"""
-    train_set, valid_set, test_set = dataSplit.get_data(0.7, 0.15, 0.15, path_images)
-    # train_set, valid_set, test_set = dataStatic.get_data(path_images)
-    
-    IMAGE_HEIGHT = 64#288 
-    IMAGE_WIDTH = 64#480
-    NUM_WORKERS = 0 if torch.cuda.is_available() else 0 #Also used for dataloaders
-    BATCH_SIZE = 16
-    
-    dloaders = loaders(train_set, valid_set, test_set, batch_size=BATCH_SIZE, 
-                     image_height=IMAGE_HEIGHT, image_width=IMAGE_WIDTH, 
-                     in_channels=in_channels, out_channels=out_channels)
-       
+    out_channels = 2
+    dataset_type = Dataset2D
+    no_classes_msk = 2
+    image_height = 512
+    image_width = 512
+    batch_size = 2
+
+    """Split Data (Percent or Static, 70-15-15)"""
+    # train_set, valid_set, test_set = dataSplit.get_data(0.7, 0.15, 0.15, path_images,_format='.png')
+    # train_set, valid_set, test_set = dataStatic.get_data(path_images, val_size=0.1, _format='.png')
+    train_set, valid_set, test_set = dataStatic.get_data_folds(path_images, val_size=0.1, _format='.png')
     #%% Evolutionary process, evo-statics and parameters
     #Evolutionary parameters
-    pz = 10
-    ng = 5
-    cxpb = 0.8
-    mutpb = 0.19
+    pz = 5
+    ng = 2
+    cxpb = 0.5
+    mutpb = 0.49
     nelit = 1 
-    tz = 7
+    tz=7
     mstats=statics_()
     hof = tools.HallOfFame(nelit)
-    checkpoint_name = False #'checkpoint_evo.pkl'#False
-    verbose_evo=False
+    checkpoint_name = False#'checkpoint_evo.pkl'#,False
+    verbose_evo = False
     max_params = 31038000
-    w = 0.01
-    evolutionary_parameters = {'population_size':pz, 'n_gen': ng, 
-                               'cxpb': cxpb, 'mutpb':mutpb, 'n_elit':nelit, 'tournament_size':tz,
-                               'max_params':max_params, 'w': w
-                               }
-    
-    
+    w = 0.3
+    k_folds = False
+
     #Training_parameters
-    nepochs = 2
-    alpha = 0.5
-    beta = 0.4
-    # lossfn = ComboLoss(alpha=alpha, beta=beta, average='micro', eps=1.0)
-    # lossfn = DiceLoss(average='macro', eps=1)
-    # lossfn = ComboLoss(alpha=alpha, beta=beta, average='micro')
-    lossfn = ComboLoss(alpha=alpha, beta=beta, average="micro", include_background=True)
+    nepochs = 1
+    #alpha = 0.5
+    #beta = 0.7
+    #lossfn = ComboLoss(alpha=alpha, beta=beta, average="micro", include_background=True)
+    lossfn = DiceLoss(average='macro', include_background=False, softmax=False, eps=1e-8)
+
+    spacing_mm = (1,1,0)
+    metrics = [
+        DiceMetric(average='macro', include_background=False, softmax=False, eps=1e-8),
+        IoUMetric(average='macro', include_background=False, softmax=False, eps=1e-8),
+        HDMetric(average='macro', include_background=False, softmax=False, spacing_mm=spacing_mm),
+        NSDMetric(average='macro', include_background=False, softmax=False, spacing_mm=spacing_mm, tolerance=1),
+        ]
     lr = 0.0001
-    training_parameters = {'num_epochs':nepochs, 'loss_f':lossfn, 'learning_rate':lr}
+    tolerance = 3
     verbose_train=True
+    device='cuda:0'
+    save_model=False
+    save_images=False
+    save_datafolds=False
+    save_data=False
     
-    toolbox.register("evaluate", evaluation, nepochs=nepochs, lossfn=lossfn, lr=lr, max_params=max_params, w=w, 
-                                 loaders=dloaders, pset=pset, device="cuda:0", ruta=ruta, verbose_train=verbose_train)
-    
-    #randomSeeds=int(foldername[-1])
-    #random.seed(randomSeeds)
+    toolbox.register("select", tools.selTournament, tournsize=tz)
+    toolbox.register("evaluate", evaluation_cv, 
+                                  nepochs=nepochs, 
+                                  tolerance=tolerance, 
+                                  lossfn=lossfn,
+                                  metrics=metrics,
+                                  lr=lr, 
+                                  dataset_type = dataset_type,
+                                  no_classes_msk = no_classes_msk,
+                                  in_channels=in_channels, 
+                                  out_channels=out_channels,
+                                  batch_size = batch_size,
+                                  image_height = image_height,
+                                  image_width = image_width,
+                                  max_params=max_params, w=w, 
+                                  k_folds=k_folds,
+                                  train_set=train_set, 
+                                  valid_set=valid_set, 
+                                  test_set=test_set,
+                                  pset = pset, 
+                                  device=device, 
+                                  ruta=ruta, 
+                                  verbose_train=verbose_train,
+                                  save_model=save_model,
+                                  save_images=save_images,
+                                  save_datafolds=save_datafolds)
+
+    # toolbox.register("evaluate", evaluation, 
+    #                              nepochs=nepochs, 
+    #                              tolerance=tolerance, 
+    #                              lossfn=lossfn,
+    #                              metrics=metrics,
+    #                              lr=lr, 
+    #                              dataset_type = dataset_type,
+    #                              no_classes_msk = no_classes_msk,
+    #                              in_channels=in_channels, 
+    #                              out_channels=out_channels,
+    #                              batch_size = batch_size,
+    #                              image_height = image_height,
+    #                              image_width = image_width,
+    #                              max_params=max_params, w=w, 
+    #                              train_set=train_set, 
+    #                              valid_set=valid_set, 
+    #                              test_set=test_set,
+    #                              pset = pset, 
+    #                              device=device, 
+    #                              ruta=ruta, 
+    #                              verbose_train=verbose_train,
+    #                              save_model=save_model,
+    #                              save_images=save_images,
+    #                              save_data=save_data)
     
     #%%Run algorithm
     pop, log, cache = eaNASGPNet(pop_size = pz, toolbox = toolbox, 
@@ -301,11 +338,13 @@ def GPMain(foldername):
     #%%Best individual
     """Plot Best individual"""
     best=tools.selBest(pop,1)[0]
-    #Testing multiclass
-    # best=toolbox.individual()
     
     #%%Evo Details
     """Save details about evolutionary process"""
+    evolutionary_parameters = {'population_size':pz, 'n_gen': ng, 
+                               'cxpb': cxpb, 'mutpb':mutpb, 'n_elit':nelit, 'tournament_size':tz,
+                               'max_params':max_params, 'w': w
+                               }
     saveEvolutionaryDetails(evolutionary_parameters, best,
                             log.select("nevals"), log.select("time"),
                             filename=ruta+'/evolution_details.txt')
@@ -313,105 +352,28 @@ def GPMain(foldername):
     #%%Function frequency
     functionAnalysis(pop,10,pset,ruta)
     
-    #%%Train again the best architecture for reliable compatarion with U-Net
-    #Parameters:
-    IMAGE_HEIGHT = 64#288 
-    IMAGE_WIDTH = 64#480
-    NUM_WORKERS = 0 if torch.cuda.is_available() else 0 #Also used for dataloaders
-    BATCH_SIZE = 2
-    
-    dloaders = loaders(train_set, valid_set, test_set, batch_size=BATCH_SIZE, 
-                     image_height=IMAGE_HEIGHT, image_width=IMAGE_WIDTH, 
-                     in_channels=in_channels, out_channels = out_channels)
-    
-    best_model=toolbox.clone(best)
-    model=toolbox.make_model(best_model, in_channels, out_channels)
-    
-    """Train, val and test loaders"""
-    train_loader, _= dloaders.get_train_loader()
-    val_loader, _  = dloaders.get_val_loader()
-    test_loader, _ = dloaders.get_test_loader()
-    
-    """Optimizer"""
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    
-    """Epocas de re-entrenamiento"""
-    nepochs=10
-    
-    """Device"""
-    device='cuda:0'
-    
-    """For save images or model"""
-    save_model_flag=True
-    save_images_flag=True
-    load_model=False
-    
-    """Print the process during training"""
+    #%%%change parameters values
+    nepochs=5
+    tolerance=3
     verbose_train=True
+    save_model=True
+    save_images=True
+    save_data=True
+
+    #%%%Re evaluate best individual and save data
+    fit, dice, iou, hds, hds95, nsds, params = toolbox.evaluate(best,
+                                                                nepochs=nepochs,
+                                                                tolerance=tolerance,
+                                                                verbose_train=verbose_train,
+                                                                save_model=save_model,
+                                                                save_images=save_images,
+                                                                save_data=save_data)
+
+    #%%%Save execution
+    save_execution(ruta, foldername+'.pkl', pop, log, cache, best)
     
-    #%%Train, validate and test
-    """Train and valid model"""
-    train_loss, valid_loss, train_dice, valid_dice = train_and_validate(
-        model, train_loader, val_loader,
-        nepochs, optimizer, lossfn,
-        device, load_model, save_model_flag,
-        ruta=ruta, verbose=verbose_train,
-        )
-    
-    """Test model"""
-    dices, ious, hds, hds95 = test(test_loader, model,
-                            save_imgs=save_images_flag, ruta=ruta, device=device, verbose=True)
-    
-    params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    
-    #%%Assign attributes
-    best_model.fitness.values = (1 - w)*np.mean(dices) + w*((max_params - params)/max_params),
-    
-    #Average metrics
-    best_model.dice = np.mean(dices)
-    best_model.iou = np.mean(ious)
-    best_model.hd = np.mean(hds)
-    best_model.hd95 = np.mean(hds95)
-    # best_model.nsd = np.mean(nsds)
-    best_model.params = np.mean(params)
-    
-    #Metrics on each element in the batch
-    best_model.dices = dices
-    best_model.ious = ious
-    best_model.hds = hds
-    best_model.hd95 = hds95
-    # best_model.nsd = nsds
-    best_model.params = params
-    
-    #loss and dice during training and validation
-    best_model.train_loss = train_loss
-    best_model.valid_loss = valid_loss
-    best_model.train_dice = train_dice
-    best_model.valid_dice = valid_dice
-    
-    #%%Dice and Loss Graphs of training and validation
-    # """Coloca y guarda la gráfica de entrenamiento del mejor individuo"""
-    # toolbox.save_graphtv(best_model, ruta=ruta, filename='ReTrainValidationLoss')
-    # toolbox.save_graphtvd(best_model, ruta=ruta, filename='ReTrainValidationDice')
-    
-    #%%No. parameters and Summary
-    """No of parameters"""
-    model = model.to(device)
-    model_stats=summary(model, (1, in_channels, IMAGE_HEIGHT, IMAGE_WIDTH), verbose=0)
-    summary_model = str(model_stats)
-    
-    #%%Retrain Details
-    saveTrainingDetails(training_parameters, dloaders, 
-                        best_model, summary_model,
-                        filename=ruta+'/Retrain_best_details.txt')
-    
-    #%%Save execution: pop., log, cache, best model as .pkl file
-    save_execution(ruta, foldername+'.pkl', pop, log, cache, best_model)
-    
-    del model
-    
-    return log, pop, best_model
+    return log, pop, best
     
 if __name__=='__main__':
-    # mp.set_start_method('forkserver')
-    log, pop, best = GPMain('MSD-Hippo-MicroTrue')
+    # mp.set_start_melthod('forkserver')
+    log, pop, best = GPMain('MAMMO-PRUEBA')

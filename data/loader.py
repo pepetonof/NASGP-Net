@@ -39,28 +39,29 @@ class loaders():
         # self.PIN_MEMORY     = pin_memory
         
         
-        if self.IN_CHANNELS==3:
-            self.normalization_layer = A.Normalize(
-                mean=[0.0, 0.0, 0.0],
-                std=[1.0, 1.0, 1.0],
-                max_pixel_value=255.0,)
-        elif self.IN_CHANNELS==1:
-            self.normalization_layer = A.Normalize(
-                mean=[0.0],
-                std=[1.0],
-                max_pixel_value=255.0,)
+        # if self.IN_CHANNELS==3:
+        #     self.normalization_layer = A.Normalize(
+        #         mean=[0.0, 0.0, 0.0],
+        #         std=[1.0, 1.0, 1.0],
+        #         max_pixel_value=255.0,)
+        # elif self.IN_CHANNELS==1:
+        #     self.normalization_layer = A.Normalize(
+        #         mean=[0.0],
+        #         std=[1.0],
+        #         max_pixel_value=255.0,)
         
     def get_train_loader(self):
         train_transform = A.Compose(
             [   
-                # A.ToGray(p=1.0),
-                # A.Equalize(p=1.0),
                 A.Resize(height=self.IMAGE_HEIGHT, width=self.IMAGE_WIDTH),
                 A.HorizontalFlip(p=0.5),
                 ElasticTransform(alpha=1, sigma=10, alpha_affine=20, interpolation=1, 
                                   border_mode= 0, approximate=True, p=0.8),
                 A.GridDistortion(num_steps=10, border_mode=0, p=0.5),
-                self.normalization_layer,
+                A.Normalize(
+                    mean=[0.0],
+                    std=[1.0],
+                    max_pixel_value=255.0,),
                 ToTensorV2(),
             ],)
         train_ds = DataSet(
@@ -74,17 +75,18 @@ class loaders():
             batch_size=self.BATCH_SIZE,
             # num_workers=self.NUM_WORKERS,
             # pin_memory=self.PIN_MEMORY,
-            shuffle=True,
+            shuffle=False,
         )
         return train_loader, train_ds,
     
     def get_val_loader(self):
         val_transform = A.Compose(
                         [   
-                            # A.ToGray(p=1.0),
-                            # A.Equalize(p=1.0),
                             A.Resize(height=self.IMAGE_HEIGHT, width=self.IMAGE_WIDTH),
-                            self.normalization_layer,
+                            A.Normalize(
+                                mean=[0.0],
+                                std=[1.0],
+                                max_pixel_value=255.0,),
                             ToTensorV2(),
                         ],)
         val_ds = DataSet(
@@ -96,7 +98,7 @@ class loaders():
 
         val_loader = DataLoader(
             val_ds,
-            batch_size=1,#self.BATCH_SIZE,
+            batch_size=self.BATCH_SIZE,
             # num_workers=self.NUM_WORKERS,
             # pin_memory=self.PIN_MEMORY,
             shuffle=False,
@@ -106,10 +108,11 @@ class loaders():
     def get_test_loader(self):
         test_transform = A.Compose(
                         [   
-                            # A.ToGray(p=1.0),
-                            # A.Equalize(p=1.0),
                             A.Resize(height=self.IMAGE_HEIGHT, width=self.IMAGE_WIDTH),
-                            self.normalization_layer,
+                            A.Normalize(
+                                mean=[0.0],
+                                std=[1.0],
+                                max_pixel_value=255.0,),
                             ToTensorV2(),
                         ],)
         test_ds = DataSet(

@@ -40,14 +40,14 @@ class moduleTorchP:
 class outChConv(int):
     def __new__(cls):
         value = random.choice([8,16,32])
-        # value = random.randint(8,16)
+        # value = random.randint(8,64)
         # value = random.choice([8,12,16,24,32])
         return  value
 
 class outChSConv(int):
     def __new__(cls):
         value = random.choice([8,16,32])
-        # value = random.randint(8,32)
+        # value = random.randint(8,64)
         # value = random.choice([8,12,16,24,32])
         return  value
     
@@ -97,7 +97,7 @@ class dilationRate:
 class tetha:
     def __new__(cls):
         epsilon=3E-1
-        value = round(random.uniform(epsilon,0.8),1)
+        value = round(random.uniform(epsilon,0.8),2)
         return value
 
 # #Pooling

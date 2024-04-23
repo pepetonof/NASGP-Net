@@ -19,6 +19,13 @@ from model.train_valid import train_and_validate
 from model.predict import test
 from objective_functions import evaluate_NoParameters, evaluate_Segmentation
 
+from data.dataloader import loaders
+from torchinfo import summary
+from sklearn.model_selection import KFold
+
+import pickle
+import os
+
 def make_model(ind, in_channels, out_channels, pset):
     """Compile function"""
     func = compile(expr=ind, pset=pset)
@@ -29,38 +36,311 @@ def make_model(ind, in_channels, out_channels, pset):
     model=BackBone(first_block, out_channels)
     return model
     
-def evaluation(ind, nepochs, lossfn, lr,
-               max_params, w,
-                
-               loaders, pset, device, ruta, verbose_train):
+def evaluation_cv(ind, 
+                  nepochs, 
+                  tolerance,
+                  lossfn,
+                  metrics,
+                  lr, 
+                  dataset_type,
+                  no_classes_msk,
+                  in_channels, 
+                  out_channels,
+                  batch_size,
+                  image_height,
+                  image_width,
+                  max_params, w, 
+                  k_folds,
+                  # split,
+                  train_set, 
+                  valid_set, 
+                  test_set,
+                  pset, 
+                  device,
+                  ruta,
+                  verbose_train,
+                  save_model,
+                  save_images,
+                  save_datafolds,
+                  limit = 300000000
+                  ):
     
-    # """Make model"""
-    in_channels = loaders.IN_CHANNELS
-    out_channels = loaders.OUT_CHANNELS
+    #Generate model
     model = make_model(ind, in_channels, out_channels, pset)
     
-    #Evaluate Segmentation Metrics
-    metrics_seg, _ = evaluate_Segmentation(model, nepochs, lossfn, lr, loaders, 
-                                                 device, ruta, verbose_train)
+    #Evaluate no of parameters
+    complexity, params = evaluate_NoParameters(model, max_params)
     
-    # Segmentation metrics: Mean value on the test set
-    dice = np.mean(metrics_seg["dices"])
-    iou  = np.mean(metrics_seg["ious"])
-    hd   = np.mean(metrics_seg["hds"])
+    #Check the max number of allowed parameters, 
+    #if does not fit in the RAM, just assign an bad fit
+    if params>=limit:
+        cv_dices = [0.0]*k_folds
+        cv_ious = [0.0]*k_folds
+        cv_hds = [10.0]*k_folds
+        cv_hds95 = [9.5]*k_folds
+        cv_nsds = [10.0]*k_folds
+     
+    #else, if fits in the RAM continue with k-fold    
+    else:
+        #Cross Validation Information
+        cv_dices=[]
+        cv_ious=[]
+        cv_hds=[]
+        cv_hds95=[]
+        cv_nsds=[]
+        # cv_add_train=[]
+        
+        if type(k_folds)==int:
+            #Evaluate Segmentation Metrics
+            kfold = KFold(n_splits=k_folds, shuffle=False)
+        
+            #Merge train and valid. Leave test
+            data_fold = train_set["images"]+valid_set["images"]
+            mask_fold = train_set["masks"]+valid_set["masks"]
+        
+            # K-fold Cross Validation model evaluation
+            for fold, (train_idx, valid_idx) in enumerate(kfold.split(data_fold),1):
+                #Folds
+                train_set = dict(images = list(map(data_fold.__getitem__, train_idx)), 
+                                 masks = list(map(mask_fold.__getitem__, train_idx)))
+                valid_set = dict(images = list(map(data_fold.__getitem__, valid_idx)), 
+                                 masks = list(map(mask_fold.__getitem__, valid_idx)))
+                
+                # print('Fold No Split', fold, type(train_set), type(valid_set), type(test_set))
+                #Dataset depending on data
+                dloaders = loaders(train_set, valid_set, test_set, batch_size=batch_size, 
+                                   image_height=image_height, image_width=image_width,
+                                   dataset_type=dataset_type, no_classes_msk=no_classes_msk,
+                                   )
+                
+                #Evaluate Segentation
+                metricsTest, metricsVal, lossAndDice  = evaluate_Segmentation(model, nepochs, tolerance, lossfn, metrics, 
+                                                                              lr, dloaders,
+                                                                              device, ruta, verbose_train,
+                                                                              save_model, save_images, fold=fold)
+                
+                #Save information about fold
+                if save_datafolds:
+                    path_data = f"{ruta}/data/fold_{fold}"
+                    if not os.path.exists(path_data):
+                        os.makedirs(path_data)
+                    with open(f"{path_data}/metricsTest_fold{fold}.pkl", "wb") as cp_file:
+                        pickle.dump(metricsTest, cp_file)
+                    with open(f"{path_data}/metricsValfold_{fold}.pkl", "wb") as cp_file:
+                        pickle.dump(metricsVal, cp_file)
+                    with open(f"{path_data}/lossAndDice_fold{fold}.pkl", "wb") as cp_file:
+                        pickle.dump(lossAndDice, cp_file)
+                    
+                #Aggregate CV information
+                cv_dices.append(np.mean(metricsTest["DiceMetric"]))
+                cv_ious.append(np.mean(metricsTest["IoUMetric"]))
+                cv_hds.append(np.mean(metricsTest["HDMetric"]))
+                cv_hds95.append(np.mean(metricsTest["HDMetric95"]))
+                cv_nsds.append(np.mean(metricsTest["NSDMetric"]))
+                # cv_add_train.append(add_train)
+                
+                #Print
+                # if verbose_train:
+                #     print('DSC_mean for fold %d: %f' % (fold, cv_dices[-1]))
+                #     print('Iou_mean for fold %d: %f' % (fold, cv_ious[-1]))
+                #     print('HDS_mean for fold %d: %f' % (fold, cv_hds[-1]))
+                #     print('HDS95_mean for fold %d: %f' % (fold, cv_hds95[-1]))
+                #     print('NSD_mean for fold %d: %f' % (fold, cv_nsds[-1]))
+                
+                #Generate model again to reinitialize the weights in each fold
+                # model.initialize_weigths()
+                model = make_model(ind, in_channels, out_channels, pset)
+            
+        elif k_folds==False:#Ignore fold due the folds are already computed
+            #Evaluate pre computed folds. The paths to files are stored in train_set, test_set, valid_set as a list of dictionaries similar to those used when split is false
+            # a=len(train_set)
+            # print(a)
+            for fold in range(1, len(train_set)+1, 1):
+                #Split train to obtain valid set:
+                train_set_fold = train_set[fold-1]
+                valid_set_fold = valid_set[fold-1]
+                test_set_fold = test_set[fold-1]
+                
+                # print('Fold Split', fold, type(train_set_fold), type(valid_set_fold), type(test_set_fold))
+                
+                #Dataset depending on data
+                dloaders = loaders(train_set_fold, valid_set_fold, test_set_fold, batch_size=batch_size, 
+                                   image_height=image_height, image_width=image_width,
+                                   dataset_type=dataset_type, no_classes_msk=no_classes_msk,
+                                   )
+                # print('ModelDevice', next(model.parameters()).device)
+                #Evaluate Segentation
+                metricsTest, metricsVal, lossAndDice  = evaluate_Segmentation(model, nepochs, tolerance, lossfn, metrics, 
+                                                                              lr, dloaders,
+                                                                              device, ruta, verbose_train,
+                                                                              save_model, save_images, fold=fold)
+                #Save information about fold
+                if save_datafolds:
+                    path_data = f"{ruta}/data/fold_{fold}"
+                    if not os.path.exists(path_data):
+                        os.makedirs(path_data)
+                    with open(f"{path_data}/metricsTest_fold{fold}.pkl", "wb") as cp_file:
+                        pickle.dump(metricsTest, cp_file)
+                    with open(f"{path_data}/metricsValfold_{fold}.pkl", "wb") as cp_file:
+                        pickle.dump(metricsVal, cp_file)
+                    with open(f"{path_data}/lossAndDice_fold{fold}.pkl", "wb") as cp_file:
+                        pickle.dump(lossAndDice, cp_file)
+                    
+                #Aggregate CV information
+                cv_dices.append(np.mean(metricsTest["DiceMetric"]))
+                cv_ious.append(np.mean(metricsTest["IoUMetric"]))
+                cv_hds.append(np.mean(metricsTest["HDMetric"]))
+                cv_hds95.append(np.mean(metricsTest["HDMetric95"]))
+                cv_nsds.append(np.mean(metricsTest["NSDMetric"]))
+                # cv_add_train.append(add_train)
+                
+                #Print
+                # if verbose_train:
+                #     print('DSC_mean for fold %d: %f' % (fold, cv_dices[-1]))
+                #     print('Iou_mean for fold %d: %f' % (fold, cv_ious[-1]))
+                #     print('HDS_mean for fold %d: %f' % (fold, cv_hds[-1]))
+                #     print('HDS95_mean for fold %d: %f' % (fold, cv_hds95[-1]))
+                #     print('NSD_mean for fold %d: %f' % (fold, cv_nsds[-1]))
+                
+                #Generate model again to reinitialize the weights in each fold
+                model = make_model(ind, in_channels, out_channels, pset)
+                # model.initialize_weigths()
+
+    #Fitness as lienar combination of mean dice and the number of parameters
+    fit = (1 - w)*np.mean(cv_dices) + w*complexity
     
-    hd95 = np.mean(metrics_seg["hds95"])
-    # nsd  = np.mean(metrics_seg["nsd"])
+    #Fitness as minimization
+    # fit = (1-w)*np.mean(cv_dices_loss) + w*(params/max_params)
+    
+    # alpha = 0.25
+    # beta = 0.25
+    # DSC_loss_train = alpha*np.mean(1 - np.array(cv_dices_t))
+    # DSC_loss_val   = np.mean(1 - np.array(cv_dices))
+    # ADD_train      = beta*np.mean(np.array(cv_add_train))
+    
+    # f1 = DSC_loss_val + beta*ADD_train + alpha*DSC_loss_train
+    # f2 = params/max_params
+    # print(f1,f2)
+    # fit= (1-w)*f1 + w*f2
+
+    # print(f1, DSC_loss_val, DSC_loss_train, DSC_loss_train*alpha, ADD_train, f2, params, max_params)
+    #np.mean(cv_dices_t),
+    del model
+    return fit, np.mean(cv_dices), np.mean(cv_ious), np.mean(cv_hds), np.mean(cv_hds95), np.mean(cv_nsds), params #hd95, nds
+    
+def evaluation(ind,
+                nepochs,
+                tolerance,
+                lossfn,
+                metrics,
+                lr,
+                dataset_type,
+                no_classes_msk,
+                in_channels, 
+                out_channels,
+                batch_size,
+                image_height,
+                image_width,
+                max_params, w,
+                train_set,
+                valid_set,
+                test_set,
+                pset,
+                device,
+                ruta,
+                verbose_train,
+                save_model,
+                save_images,
+                save_data,
+                limit=300000000,
+                ):
+    
+    #Generate model
+    model = make_model(ind, in_channels, out_channels, pset)
     
     #Evaluate no of parameters
-    complexity, params = evaluate_NoParameters(model, loaders.IN_CHANNELS, max_params, pset)
+    complexity, params = evaluate_NoParameters(model, max_params)
     
+    #Check the max number of allowed parameters, 
+    #if does not fit in the RAM, just assign an bad fit
+    if params >= limit:
+            dice =0.0
+            iou = 0.0
+            hd = 10
+            hd95 = 10*0.95
+    #else, if fits in the RAM continue with train and validation
+    else:
+        
+        #Dataloaders from train_set, valid_set, test_set
+        dloaders = loaders(train_set, valid_set, test_set, batch_size=batch_size, 
+                            image_height=image_height, image_width=image_width, 
+                            dataset_type=dataset_type, no_classes_msk=no_classes_msk,
+                            )
+        
+        #Evaluate Segmentation Metrics
+        metricsTest, metricsVal, lossAndDice = evaluate_Segmentation(model, nepochs, tolerance, lossfn, metrics,
+                                                                     lr, dloaders, 
+                                                                     device, ruta, verbose_train,
+                                                                     save_model, save_images, fold=None)
+        # Segmentation metrics: Mean value on the test set
+        dice = np.mean(metricsTest["DiceMetric"])
+        iou  = np.mean(metricsTest["IoUMetric"])
+        hd   = np.mean(metricsTest["HDMetric"])
+        hd95 = np.mean(metricsTest["HDMetric95"])
+        nsd  = np.mean(metricsTest["NSDMetric"])
+        
+        # print(metricsTest)
+        # print(metricsVal)
+        
+        if save_data:
+            path_data = f"{ruta}/data/"
+            if not os.path.exists(path_data):
+                os.makedirs(path_data)
+            with open(f"{path_data}/metricsTest.pkl", "wb") as cp_file:
+                pickle.dump(metricsTest, cp_file)
+            with open(f"{path_data}/metricsVal.pkl", "wb") as cp_file:
+                pickle.dump(metricsVal, cp_file)
+            with open(f"{path_data}/lossAndDice.pkl", "wb") as cp_file:
+                pickle.dump(lossAndDice, cp_file)
+            d={}
+            d_aux = {"Height": dloaders.IMAGE_HEIGHT, 
+                     "Width":dloaders.IMAGE_WIDTH, 
+                     "Train_Size":len(dloaders.TRAIN_IMG_DIR),
+                     "Valid_Size":len(dloaders.VAL_IMG_DIR),
+                     "Test_Size": len(dloaders.TEST_IMG_DIR),}
+            d.update(d_aux)
+            d_aux = {"Best":ind, "Best_Fitness":ind.fitness.values[0], 
+                   
+                    "DiceMean": dice, "DiceMedian":np.median(metricsTest["DiceMetric"]), "DiceMax":np.max(metricsTest["DiceMetric"]),
+                    "DiceMin": np.min(metricsTest["DiceMetric"]), "DiceStd":np.std(metricsTest["DiceMetric"]),
+                   
+                    "IoUMean": iou, "IoUMedian":np.median(metricsTest["IoUMetric"]), "IoUMax": np.max(metricsTest["IoUMetric"]),
+                    "IoUMin": np.min(metricsTest["IoUMetric"]), "IoUStd": np.std(metricsTest["IoUMetric"]),
+                   
+                    "HdMean": hd, "HdMedian":np.median(metricsTest["HDMetric"]), "HdMax": np.max(metricsTest["HDMetric"]),
+                    "HdMin": np.min(metricsTest["HDMetric"]), "HdStd": np.std(metricsTest["HDMetric"]),
+                    
+                    "Hd95Mean": hd95, "HD95Median":np.median(metricsTest["HDMetric95"]), "Hd95Max": np.max(metricsTest["HDMetric95"]),
+                    "Hd95Min": np.min(metricsTest["HDMetric95"]), "Hd95Std": np.std(metricsTest["HDMetric95"]),
+                    
+                    "NSDMean": nsd, "NSDMedian":np.median(metricsTest["NSDMetric"]), "NSDMax": np.max(metricsTest["NSDMetric"]),
+                    "NSDMin": np.min(metricsTest["NSDMetric"]), "NSDStd": np.std(metricsTest["NSDMetric"]),                    
+                    }
+            d.update(d_aux)
+            model_stats=summary(model, (batch_size, in_channels, image_height, image_width), verbose=0)
+            summary_model = str(model_stats)
+            d_aux = {"Summary_Model": summary_model}
+            d.update(d_aux)
+            
+            with open(f"{path_data}/data.txt", 'w', encoding="utf-8") as f: 
+                for key, value in d.items(): 
+                    f.write('%s\n%s\n' % (key, value))
+
     #Fitness as lienar combination of mean dice and the number of parameters
     fit = (1 - w)*dice + w*complexity
     
-    #return fit, dice, params, metrics_seg#, metrics, train_valid, params
-    # return fit, metrics_seg, params
-    return fit, dice, iou, hd, hd95, params #hd95, nds
-    
+    return fit, dice, iou, hd, hd95, nsd, params
+        
 
 def evaluationMO(ind, nepochs, lossfn, lr,
                  max_params,

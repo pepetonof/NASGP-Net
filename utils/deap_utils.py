@@ -24,7 +24,7 @@ def statics_():
     stats_iou = tools.Statistics(lambda individual: individual.iou)
     stats_hd = tools.Statistics(lambda individual: individual.hd)
     stats_hd95 = tools.Statistics(lambda individual: individual.hd95)
-    # stats_nds = tools.Statistics(lambda individual: individual.nds)
+    stats_nds = tools.Statistics(lambda individual: individual.nsd)
     stats_params = tools.Statistics(lambda individual: individual.params)
 
     mstats = tools.MultiStatistics(Fitness=stats_fit, 
@@ -32,16 +32,17 @@ def statics_():
                                    IoU=stats_iou,
                                    HD=stats_hd,
                                    HD95=stats_hd95,
-                                   # nds=stats_nds,
+                                   NSD=stats_nds,
                                    Params=stats_params,
                                    Size=stats_size, 
                                    Depth=stats_depth,)
     
     mstats.register("mean", np.mean)
+    mstats.register("median", np.median)
     mstats.register("std", np.std)
     mstats.register("min", np.min)
     mstats.register("max", np.max)
-    mstats.register("median", np.median)
+    
     
     return mstats
 
@@ -55,9 +56,9 @@ def show_statics(estadisticas, rutita):
     
     def convergence_graph2():
         gen=estadisticas.select("gen")
-        fit_max=estadisticas.chapters["Fitness"].select("max")
+        fit_min=estadisticas.chapters["Fitness"].select("max")
         fig, host = plt.subplots()
-        p1, = host.plot(gen, fit_max, "b-", label="Max Fit")
+        p1, = host.plot(gen, fit_min, "b-", label="Max Fit")
         host.set_xlabel("Generations")
         host.set_ylabel("Fitness")
         host.yaxis.label.set_color(p1.get_color())
@@ -74,7 +75,7 @@ def show_statics(estadisticas, rutita):
     
     def convergence_graph():
         gen=estadisticas.select("gen")
-        fit_max=estadisticas.chapters["Fitness"].select("max")
+        fit_min=estadisticas.chapters["Fitness"].select("max")
         size_avgs=estadisticas.chapters["Size"].select("avg")
         depth_avgs=estadisticas.chapters["Depth"].select("avg")
         
@@ -88,7 +89,7 @@ def show_statics(estadisticas, rutita):
         make_patch_spines_invisible(par2)
         par2.spines["right"].set_visible(True)
         
-        p1, = host.plot(gen, fit_max, "b-", label="Max Fit")
+        p1, = host.plot(gen, fit_min, "b-", label="Max Fit")
         p2, = par1.plot(gen, size_avgs, "r-", label="Avg Size")
         p3, = par2.plot(gen, depth_avgs, "g-", label="Avg Depth ")
         
@@ -117,17 +118,18 @@ def show_statics(estadisticas, rutita):
     
     def metrics():
         gen=estadisticas.select("gen")
-        dice=estadisticas.select("dice")
-        iou=estadisticas.select("iou")
-        hds=estadisticas.select("hd")
+        dice=estadisticas.chapters["Dice"].select('mean')
+        iou=estadisticas.chapters["IoU"].select('mean')
+        hds=estadisticas.chapters["HD95"].select('mean')
+        nsd=estadisticas.chapters["NSD"].select('mean')
         
         fig, host = plt.subplots()
         par1=host.twinx()
         
         p1, = host.plot(gen, dice, "b-", label="Dice")
         p2, = host.plot(gen, iou, "r-", label="IoU")
-        p3, = par1.plot(gen, hds, "g-", label="H.Distance")
-        
+        p3, = par1.plot(gen, hds, "g-", label="HD95")
+        p4, = par1.plot(gen, nsd, "m-", label="NSD")
         host.set_xlabel("Generations")
         host.set_ylabel("Overlap", color="k")
         par1.set_ylabel("Distance", color="g")
@@ -139,7 +141,7 @@ def show_statics(estadisticas, rutita):
         host.tick_params(axis='y', colors=p1.get_color(), **tkw)
         par1.tick_params(axis='y', colors=p3.get_color(), **tkw)
         
-        lines = [p1, p2, p3]
+        lines = [p1, p2, p3, p4]
         host.legend(lines, [l.get_label() for l in lines], loc="lower right")
         
         plt.close(fig)
@@ -148,8 +150,8 @@ def show_statics(estadisticas, rutita):
         
     def size_depth():
         gen=estadisticas.select("gen")
-        size_avgs=estadisticas.chapters["Size"].select("avg")
-        depth_avgs=estadisticas.chapters["Depth"].select("avg")
+        size_avgs=estadisticas.chapters["Size"].select("mean")
+        depth_avgs=estadisticas.chapters["Depth"].select("mean")
         
         fig, host = plt.subplots()
         fig.subplots_adjust(right=0.75)
@@ -196,7 +198,7 @@ def log2csv(log, mstats, ruta):
     for h in log.header:
         if h in list(log.chapters.keys()):
             for sts in mstats[h].fields:
-                # print(sts)
+                # print(h, sts)
                 lst_keys.append(h+"_"+sts)
                 lst_vals.append(log.chapters[h].select(sts))
         else:
@@ -344,4 +346,7 @@ def functionAnalysis(pop, n, pset, ruta):
     plt.xlabel('Functions')
     plt.title('Best and worst {n} individuals'.format(n=n))
     plt.savefig(ruta+"/FunctionsBar.png")
+    plt.close()
     plt.show()
+    
+    

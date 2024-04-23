@@ -9,7 +9,7 @@ import copy
 import albumentations as A
 from albumentations.pytorch.transforms import ToTensorV2
 import matplotlib.pyplot as plt
-from deap import tools
+# from deap import tools
 
 
 def visualize_augmentations(dataset, idx=0, samples=5):
