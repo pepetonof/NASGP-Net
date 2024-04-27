@@ -17,6 +17,7 @@ def evaluate_NoParameters(model, max_params):
     
     return (max_params - params)/max_params, params
 
+#fold only for print purposes
 def evaluate_Segmentation(model, num_epochs, tolerance, loss_fn, metrics, lr, 
                           loaders, device, ruta, verbose_train,
                           save_model, save_images, fold=None):
@@ -39,6 +40,6 @@ def evaluate_Segmentation(model, num_epochs, tolerance, loss_fn, metrics, lr,
     """Test model"""
     metricsTest = test(test_loader, model, metrics,
                        save_imgs=save_images, ruta=ruta, 
-                       device=device, verbose=verbose_train)
+                       device=device, verbose=verbose_train, fold=fold)
     
     return metricsTest, metricsVal, lossAndDice

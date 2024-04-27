@@ -15,7 +15,7 @@ from albumentations.pytorch.transforms import ToTensorV2
 from data.dataset import Dataset2D, Dataset3D, Dataset3D22D
 import torch
 
-class loaders():
+class loaders:
     def __init__(self, train, valid, test, batch_size, 
                  image_height, image_width, 
                  # in_channels,
@@ -120,7 +120,7 @@ class loaders():
                 
         #DataLoader
         val_loader = DataLoader(val_ds,
-                                batch_size=self.BATCH_SIZE,
+                                batch_size=1,#self.BATCH_SIZE,
                                 shuffle=False,
                                 )
         
@@ -161,14 +161,8 @@ class loaders():
                 
         #DataLoader
         test_loader = DataLoader(test_ds,
-                                batch_size=1,
-                                shuffle=False,
+                                 batch_size=1,
+                                 shuffle=False,
                                 )
         
         return test_loader, test_ds
-        
-
-
-    
-
-

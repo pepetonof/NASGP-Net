@@ -91,6 +91,8 @@ def train(train_loader, model,
         images = images.to(device=device)
         targets = targets.long().to(device=device)
         
+        # print(images.shape, targets.shape)
+        
         # forward
         # with torch.cuda.amp.autocast():
         predictions = model(images)
@@ -122,10 +124,12 @@ def train(train_loader, model,
             dice = metricsTrain['DiceMetric'][-1]
             # print('VERBOSE', dice, dice.item())
             metric_monitor.update("dice", dice)#loss.item())
-            if fold!=None:  
+            if fold!=None:
+                # print()
                 stream.set_description("Training-{epoch} Fold-{fold} \t\t\t{metric_monitor}".format(epoch=epoch, 
                                                                                                     fold=fold,                                                                             metric_monitor=metric_monitor))
             else:
+                # print()
                 stream.set_description("Training-{epoch} \t\t{metric_monitor}".format(epoch=epoch, 
                                                                                       metric_monitor=metric_monitor))
         #backward
@@ -199,6 +203,9 @@ def validate(val_loader, model,
             
             if save_imgs:
                 # print('Saving')
+                # filename = val_loader.dataset[]
+                filename_img = val_loader.dataset.image_dir[idx-1].name.split('.')[0]
+                # filename_mask = val_loader.dataset.mask_dir[idx-1].name.split('.')[0]
                 path_imgs = f"{ruta}/validate_segmentation/fold_{fold}" if fold!=None else f"{ruta}/validate_segmentation"
                 if not os.path.exists(path_imgs):
                     os.makedirs(path_imgs)
@@ -229,11 +236,11 @@ def validate(val_loader, model,
                 
                 #Save original image
                 if epoch==1:
-                    torchvision.utils.save_image(x, f"{path_imgs}/{idx}_input.png")
+                    torchvision.utils.save_image(x, f"{path_imgs}/{filename_img}.png")
                     # print(x.max(), x.shape, x.dtype)
                     over_masks = (over_masks.float())/255.00
                     # print(over_masks.max(), over_masks.shape, over_masks.dtype)
-                    title = f"{path_imgs}/{idx}_overmask_F{fold}.png" if fold!=None else f"{path_imgs}/{idx}_overmask.png"
+                    title = f"{path_imgs}/{filename_img}_mask_F{fold}.png" if fold!=None else f"{path_imgs}/{filename_img}_mask.png"
                     torchvision.utils.save_image(over_masks, title)
                 
                 # print(over_preds.shape, over_masks.shape)
@@ -247,13 +254,13 @@ def validate(val_loader, model,
                 # print(over_preds.max(), over_preds.shape, over_preds.dtype)
                 # print(over_preds.shape, over_masks.shape)
                 
-                title = f"{path_imgs}/{idx}_overpred_E{epoch}F{fold}_dice={round(dice,3)}.png" if fold else f"{path_imgs}/{idx}_overpred_E{epoch}_dice={round(dice,3)}.png"
+                title = f"{path_imgs}/{filename_img}_pred_E{epoch}F{fold}_dice={round(dice,3)}.png" if fold else f"{path_imgs}/{filename_img}_pred_E{epoch}_dice={round(dice,3)}.png"
                 torchvision.utils.save_image(over_preds, title)
             
                 #Save grid of the three best/worst individuals
-                iou = metricsVal['IoUMetric'][-1]
-                hd = metricsVal['HDMetric95'][-1]
-                obj_best=imgs(x, over_masks, over_preds, dice, iou, hd)
+                # iou = metricsVal['IoUMetric'][-1]
+                # hd = metricsVal['HDMetric95'][-1]
+                obj_best=imgs(x, over_masks, over_preds, dice)#, iou, hd)
                 objs.append(obj_best)
             
             if verbose:
@@ -314,7 +321,7 @@ def train_and_validate(model, train_loader, val_loader,
         
         # print('Trained')
         
-        losses_v, metricsVal = validate(val_loader, model, loss_fn, metrics,
+        losses_v, metricsVal = validate(val_loader, model, loss_fn, metrics[:1],
                                          fold, epoch, 
                                          save_imgs=save_images, ruta=ruta, 
                                          device=device, verbose=verbose)

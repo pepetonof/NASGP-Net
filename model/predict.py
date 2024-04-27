@@ -45,19 +45,19 @@ class MetricMonitor:
         )
 
 class imgs():
-    def __init__(self, im, gt, pr, dice, iou, hd):
+    def __init__(self, im, gt, pr, dice):#, iou, hd):
         self.im = im
         self.gt = gt
         self.pr = pr
         
         self.dice=dice
-        self.iou=iou
-        self.hd=hd
+        # self.iou=iou
+        # self.hd=hd
 
 
 def test(test_loader, model, metrics,
          save_imgs=False, ruta="saved_images/", 
-         device="cuda", verbose=False):
+         device="cuda", verbose=False, fold=None):
     
     model = model.to(device)
     
@@ -107,8 +107,13 @@ def test(test_loader, model, metrics,
             
             """Metrics for evaluation"""            
             if save_imgs:
+                filename_img = test_loader.dataset.image_dir[idx-1].name.split('.')[0]
+                # filename_mask = test_loader.dataset.mask_dir[idx-1].name.split('.')[0]
+                # print()
+                # print('IMGS',filename_img, type(filename_img))
+                # print('MASKS',filename_mask, type(filename_img))
                 # path_imgs=ruta+"/test_segmentation"
-                path_imgs = f"{ruta}/test_segmentation"
+                path_imgs = f"{ruta}/test_segmentation/fold_{fold}" if fold!=None else f"{ruta}/test_segmentation"
                 if not os.path.exists(path_imgs):
                     os.makedirs(path_imgs)
                 
@@ -135,9 +140,10 @@ def test(test_loader, model, metrics,
                 over_masks, over_preds = overlay_imgs(x, y_roi, pred_roi)
                 
                 #Save original image
-                torchvision.utils.save_image(x, f"{path_imgs}/{idx}_input.png")
+                torchvision.utils.save_image(x, f"{path_imgs}/{filename_img}.png")
                 over_masks = (over_masks.float())/255.00
-                torchvision.utils.save_image(over_masks, f"{path_imgs}/{idx}_overmask.png")
+                title = f"{path_imgs}/{filename_img}_mask_F{fold}.png" if fold!=None else f"{path_imgs}/{filename_img}_mask.png"
+                torchvision.utils.save_image(over_masks, title)
                 
                 #Set dice index to the over_preds
                 dice = metricsTest['DiceMetric'][-1]
@@ -145,12 +151,13 @@ def test(test_loader, model, metrics,
                 
                 #For save with torch.utils.save_image()
                 over_preds = (over_preds.float())/255.00
-                torchvision.utils.save_image(over_preds, f"{path_imgs}/{idx}_overpred_dice={round(dice,3)}.png")
+                title = f"{path_imgs}/{filename_img}_pred_F{fold}_dice={round(dice,3)}.png" if fold else f"{path_imgs}/{filename_img}_pred_dice={round(dice,3)}.png"
+                torchvision.utils.save_image(over_preds, title)
             
                 #Save grid of the three best/worst individuals
-                iou = metricsTest['IoUMetric'][-1]
-                hd = metricsTest['HDMetric95'][-1]
-                obj_best=imgs(x, over_masks, over_preds, dice, iou, hd)
+                # iou = metricsTest['IoUMetric'][-1]
+                # hd = metricsTest['HDMetric95'][-1]
+                obj_best=imgs(x, over_masks, over_preds, dice)#, iou, hd)
                 objs.append(obj_best)
             
             if verbose:
@@ -243,9 +250,9 @@ def overlay_imgs(inputs, masks, preds, alpha=0.4):
     return tensor_masks, tensor_preds
 
 def set_title(tensor,string):
-    font=ImageFont.truetype('C:/Users/josef/OneDrive - Universidad Veracruzana/DIA/NASGP-Net/code/Arial.ttf',11)
+    # font=ImageFont.truetype('C:/Users/josef/OneDrive - Universidad Veracruzana/DIA/NASGP-Net/code/Arial.ttf',11)
     # font=ImageFont.truetype(r'/home/202201016n/serverBUAP/NASGP-Net/Arial.ttf', 12)
-    # font=ImageFont.truetype('Arial.ttf',12)
+    font=ImageFont.truetype('Arial.ttf',11)
     w, h = font.getsize(string)
     out_tensor=[]
     # print(tensor.shape)

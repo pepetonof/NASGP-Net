@@ -61,15 +61,19 @@ def evaluation_cv(ind,
                   verbose_train,
                   save_model,
                   save_images,
-                  save_datafolds,
+                  save_data = False,
                   limit = 300000000
                   ):
+    
+    #Generate a folder with the string of individual
+    ruta_ind = ruta+"/"+str(ind)
     
     #Generate model
     model = make_model(ind, in_channels, out_channels, pset)
     
     #Evaluate no of parameters
     complexity, params = evaluate_NoParameters(model, max_params)
+    # print(ind, params)
     
     #Check the max number of allowed parameters, 
     #if does not fit in the RAM, just assign an bad fit
@@ -116,12 +120,21 @@ def evaluation_cv(ind,
                 #Evaluate Segentation
                 metricsTest, metricsVal, lossAndDice  = evaluate_Segmentation(model, nepochs, tolerance, lossfn, metrics, 
                                                                               lr, dloaders,
-                                                                              device, ruta, verbose_train,
+                                                                              device, ruta_ind, verbose_train,
                                                                               save_model, save_images, fold=fold)
                 
+                #Aggregate CV information
+                cv_dices.append(np.mean(metricsTest["DiceMetric"]))
+                cv_ious.append(np.mean(metricsTest["IoUMetric"]))
+                cv_hds.append(np.mean(metricsTest["HDMetric"]))
+                cv_hds95.append(np.mean(metricsTest["HDMetric95"]))
+                cv_nsds.append(np.mean(metricsTest["NSDMetric"]))
+                
                 #Save information about fold
-                if save_datafolds:
-                    path_data = f"{ruta}/data/fold_{fold}"
+                if save_data:
+                    path_data = f"{ruta_ind}/data/fold_{fold}"
+                    
+                    #Save data as .pkl file
                     if not os.path.exists(path_data):
                         os.makedirs(path_data)
                     with open(f"{path_data}/metricsTest_fold{fold}.pkl", "wb") as cp_file:
@@ -131,12 +144,61 @@ def evaluation_cv(ind,
                     with open(f"{path_data}/lossAndDice_fold{fold}.pkl", "wb") as cp_file:
                         pickle.dump(lossAndDice, cp_file)
                     
-                #Aggregate CV information
-                cv_dices.append(np.mean(metricsTest["DiceMetric"]))
-                cv_ious.append(np.mean(metricsTest["IoUMetric"]))
-                cv_hds.append(np.mean(metricsTest["HDMetric"]))
-                cv_hds95.append(np.mean(metricsTest["HDMetric95"]))
-                cv_nsds.append(np.mean(metricsTest["NSDMetric"]))
+                    #Save data as .txt with statistics
+                    d={}
+                    d_aux = {"Height": dloaders.IMAGE_HEIGHT, 
+                             "Width":dloaders.IMAGE_WIDTH, 
+                             "Train_Size":len(dloaders.TRAIN_IMG_DIR),
+                             "Valid_Size":len(dloaders.VAL_IMG_DIR),
+                             "Test_Size": len(dloaders.TEST_IMG_DIR),}
+                    d.update(d_aux)
+                    # print(ind, ind.fitness)
+                    d_aux = {"Ind":ind, "Ind_Fitness":(1 - w)*np.mean(metricsTest["DiceMetric"]) + w*complexity, 
+                           
+                            "DiceMean": np.mean(metricsTest["DiceMetric"]), "DiceMedian":np.median(metricsTest["DiceMetric"]), "DiceMax":np.max(metricsTest["DiceMetric"]),
+                            "DiceMin": np.min(metricsTest["DiceMetric"]), "DiceStd":np.std(metricsTest["DiceMetric"]),
+                           
+                            "IoUMean": np.mean(metricsTest["IoUMetric"]), "IoUMedian":np.median(metricsTest["IoUMetric"]), "IoUMax": np.max(metricsTest["IoUMetric"]),
+                            "IoUMin": np.min(metricsTest["IoUMetric"]), "IoUStd": np.std(metricsTest["IoUMetric"]),
+                           
+                            "HdMean": np.mean(metricsTest["HDMetric"]), "HdMedian":np.median(metricsTest["HDMetric"]), "HdMax": np.max(metricsTest["HDMetric"]),
+                            "HdMin": np.min(metricsTest["HDMetric"]), "HdStd": np.std(metricsTest["HDMetric"]),
+                            
+                            "Hd95Mean": np.mean(metricsTest["HDMetric95"]), "HD95Median":np.median(metricsTest["HDMetric95"]), "Hd95Max": np.max(metricsTest["HDMetric95"]),
+                            "Hd95Min": np.min(metricsTest["HDMetric95"]), "Hd95Std": np.std(metricsTest["HDMetric95"]),
+                            
+                            "NSDMean": np.mean(metricsTest["NSDMetric"]), "NSDMedian":np.median(metricsTest["NSDMetric"]), "NSDMax": np.max(metricsTest["NSDMetric"]),
+                            "NSDMin": np.min(metricsTest["NSDMetric"]), "NSDStd": np.std(metricsTest["NSDMetric"]),                    
+                            }
+                    d.update(d_aux)
+                    model_stats=summary(model, (batch_size, in_channels, image_height, image_width), verbose=0)
+                    summary_model = str(model_stats)
+                    d_aux = {"Summary_Model": summary_model}
+                    d.update(d_aux)
+                
+                    with open(f"{path_data}/data_fold{fold}.txt", 'w', encoding="utf-8") as f: 
+                        for key, value in d.items(): 
+                            f.write('%s\n%s\n' % (key, value))
+                            
+                    #Save the train_set, valid_set and test_set in a .txt files
+                    with open(f"{path_data}/train_set_fold{fold}.txt", 'w', encoding="utf-8") as f: 
+                        for key, value in train_set.items(): 
+                            f.write('\n%s\n' % (key))
+                            for name in [path.name for path in value]:
+                                f.write('%s\n' % (name))
+                                        
+                    with open(f"{path_data}/valid_set_fold{fold}.txt", 'w', encoding="utf-8") as f: 
+                        for key, value in valid_set.items(): 
+                            f.write('\n%s\n' % (key))
+                            for name in [path.name for path in value]:
+                                f.write('%s\n' % (name))
+                                        
+                    with open(f"{path_data}/test_set_fold{fold}.txt", 'w', encoding="utf-8") as f: 
+                        for key, value in test_set.items(): 
+                            f.write('\n%s\n' % (key))
+                            for name in [path.name for path in value]:
+                                f.write('%s\n' % (name))
+  
                 # cv_add_train.append(add_train)
                 
                 #Print
@@ -172,20 +234,10 @@ def evaluation_cv(ind,
                 #Evaluate Segentation
                 metricsTest, metricsVal, lossAndDice  = evaluate_Segmentation(model, nepochs, tolerance, lossfn, metrics, 
                                                                               lr, dloaders,
-                                                                              device, ruta, verbose_train,
-                                                                              save_model, save_images, fold=fold)
-                #Save information about fold
-                if save_datafolds:
-                    path_data = f"{ruta}/data/fold_{fold}"
-                    if not os.path.exists(path_data):
-                        os.makedirs(path_data)
-                    with open(f"{path_data}/metricsTest_fold{fold}.pkl", "wb") as cp_file:
-                        pickle.dump(metricsTest, cp_file)
-                    with open(f"{path_data}/metricsValfold_{fold}.pkl", "wb") as cp_file:
-                        pickle.dump(metricsVal, cp_file)
-                    with open(f"{path_data}/lossAndDice_fold{fold}.pkl", "wb") as cp_file:
-                        pickle.dump(lossAndDice, cp_file)
-                    
+                                                                              device, ruta_ind, verbose_train,
+                                                                              save_model, save_images,
+                                                                              fold=fold)
+                
                 #Aggregate CV information
                 cv_dices.append(np.mean(metricsTest["DiceMetric"]))
                 cv_ious.append(np.mean(metricsTest["IoUMetric"]))
@@ -194,6 +246,73 @@ def evaluation_cv(ind,
                 cv_nsds.append(np.mean(metricsTest["NSDMetric"]))
                 # cv_add_train.append(add_train)
                 
+                #Save information about fold
+                if save_data:
+                    path_data = f"{ruta_ind}/data/fold_{fold}"
+                    if not os.path.exists(path_data):
+                        os.makedirs(path_data)
+                    with open(f"{path_data}/metricsTest_fold{fold}.pkl", "wb") as cp_file:
+                        pickle.dump(metricsTest, cp_file)
+                    with open(f"{path_data}/metricsVal_fold{fold}.pkl", "wb") as cp_file:
+                        pickle.dump(metricsVal, cp_file)
+                    with open(f"{path_data}/lossAndDice_fold{fold}.pkl", "wb") as cp_file:
+                        pickle.dump(lossAndDice, cp_file)
+                        
+                    d={}
+                    d_aux = {"Height": dloaders.IMAGE_HEIGHT, 
+                             "Width":dloaders.IMAGE_WIDTH, 
+                             "Train_Size":len(dloaders.TRAIN_IMG_DIR),
+                             "Valid_Size":len(dloaders.VAL_IMG_DIR),
+                             "Test_Size": len(dloaders.TEST_IMG_DIR),}
+                    d.update(d_aux)
+                    d_aux = {"Ind":ind, "Ind_Fitness": (1 - w)*np.mean(metricsTest["DiceMetric"]) + w*complexity, #ind.fitness.values[0], 
+                           
+                            "DiceMean": np.mean(metricsTest["DiceMetric"]), "DiceMedian":np.median(metricsTest["DiceMetric"]), "DiceMax":np.max(metricsTest["DiceMetric"]),
+                            "DiceMin": np.min(metricsTest["DiceMetric"]), "DiceStd":np.std(metricsTest["DiceMetric"]),
+                           
+                            "IoUMean": np.mean(metricsTest["IoUMetric"]), "IoUMedian":np.median(metricsTest["IoUMetric"]), "IoUMax": np.max(metricsTest["IoUMetric"]),
+                            "IoUMin": np.min(metricsTest["IoUMetric"]), "IoUStd": np.std(metricsTest["IoUMetric"]),
+                           
+                            "HdMean": np.mean(metricsTest["HDMetric"]), "HdMedian":np.median(metricsTest["HDMetric"]), "HdMax": np.max(metricsTest["HDMetric"]),
+                            "HdMin": np.min(metricsTest["HDMetric"]), "HdStd": np.std(metricsTest["HDMetric"]),
+                            
+                            "Hd95Mean": np.mean(metricsTest["HDMetric95"]), "HD95Median":np.median(metricsTest["HDMetric95"]), "Hd95Max": np.max(metricsTest["HDMetric95"]),
+                            "Hd95Min": np.min(metricsTest["HDMetric95"]), "Hd95Std": np.std(metricsTest["HDMetric95"]),
+                            
+                            "NSDMean": np.mean(metricsTest["NSDMetric"]), "NSDMedian":np.median(metricsTest["NSDMetric"]), "NSDMax": np.max(metricsTest["NSDMetric"]),
+                            "NSDMin": np.min(metricsTest["NSDMetric"]), "NSDStd": np.std(metricsTest["NSDMetric"]),                    
+                            }
+                    d.update(d_aux)
+                    model_stats=summary(model, (batch_size, in_channels, image_height, image_width), verbose=0)
+                    summary_model = str(model_stats)
+                    d_aux = {"Summary_Model": summary_model}
+                    d.update(d_aux)
+                    
+                    with open(f"{path_data}/data_fold{fold}.txt", 'w', encoding="utf-8") as f: 
+                        for key, value in d.items(): 
+                            f.write('%s\n%s\n' % (key, value))
+                    
+                    #Save the train_set, valid_set and test_set in a .txt files
+                    with open(f"{path_data}/train_set_fold{fold}.txt", 'w', encoding="utf-8") as f: 
+                        for key, value in train_set_fold.items(): 
+                            f.write('\n%s\n' % (key))
+                            for name in [path.name for path in value]:
+                                f.write('%s\n' % (name))
+                                        
+                    with open(f"{path_data}/valid_set_fold{fold}.txt", 'w', encoding="utf-8") as f: 
+                        for key, value in valid_set_fold.items(): 
+                            f.write('\n%s\n' % (key))
+                            for name in [path.name for path in value]:
+                                f.write('%s\n' % (name))
+                                        
+                    with open(f"{path_data}/test_set_fold{fold}.txt", 'w', encoding="utf-8") as f: 
+                        for key, value in test_set_fold.items(): 
+                            f.write('\n%s\n' % (key))
+                            for name in [path.name for path in value]:
+                                f.write('%s\n' % (name))
+                    
+                    
+                    
                 #Print
                 # if verbose_train:
                 #     print('DSC_mean for fold %d: %f' % (fold, cv_dices[-1]))
@@ -251,9 +370,11 @@ def evaluation(ind,
                 verbose_train,
                 save_model,
                 save_images,
-                save_data,
+                save_data=False,
                 limit=300000000,
                 ):
+    #Change ruta with name of the str(ind)
+    ruta = ruta+"/"+str(ind)
     
     #Generate model
     model = make_model(ind, in_channels, out_channels, pset)
@@ -309,7 +430,7 @@ def evaluation(ind,
                      "Valid_Size":len(dloaders.VAL_IMG_DIR),
                      "Test_Size": len(dloaders.TEST_IMG_DIR),}
             d.update(d_aux)
-            d_aux = {"Best":ind, "Best_Fitness":ind.fitness.values[0], 
+            d_aux = {"Ind":ind, "Ind_Fitness":ind.fitness.values[0], 
                    
                     "DiceMean": dice, "DiceMedian":np.median(metricsTest["DiceMetric"]), "DiceMax":np.max(metricsTest["DiceMetric"]),
                     "DiceMin": np.min(metricsTest["DiceMetric"]), "DiceStd":np.std(metricsTest["DiceMetric"]),
@@ -335,6 +456,25 @@ def evaluation(ind,
             with open(f"{path_data}/data.txt", 'w', encoding="utf-8") as f: 
                 for key, value in d.items(): 
                     f.write('%s\n%s\n' % (key, value))
+                    
+            #Save the train_set, valid_set and test_set in a .txt files
+            with open(f"{path_data}/train_set.txt", 'w', encoding="utf-8") as f: 
+                for key, value in train_set.items(): 
+                    f.write('%s\n' % (key))
+                    for name in [path.name for path in value]:
+                        f.write('%s\n' % (name))
+                                
+            with open(f"{path_data}/valid_set.txt", 'w', encoding="utf-8") as f: 
+                for key, value in valid_set.items(): 
+                    f.write('%s\n' % (key))
+                    for name in [path.name for path in value]:
+                        f.write('%s\n' % (name))
+                                
+            with open(f"{path_data}/test_set.txt", 'w', encoding="utf-8") as f: 
+                for key, value in test_set.items(): 
+                    f.write('%s\n' % (key))
+                    for name in [path.name for path in value]:
+                        f.write('%s\n' % (name))
 
     #Fitness as lienar combination of mean dice and the number of parameters
     fit = (1 - w)*dice + w*complexity

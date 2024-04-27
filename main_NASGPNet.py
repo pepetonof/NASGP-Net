@@ -211,30 +211,33 @@ def GPMain(foldername):
     """Create folder to storage"""
     # path='/scratch/202201016n'
     path= "C:/Users/josef/serverBUAP/corridas"
-    ruta=path+"/cross_validation/"+str(foldername)
+    ruta=path+"/mammo/"+str(foldername)
     if not os.path.exists(ruta):
         os.makedirs(ruta)
     
     #%% Data
-    # path_images='/home/202201016n/serverBUAP/datasets/images_DHIPPO'
+    # path_images='/home/202201016n/serverBUAP/datasets/images_COVID'
     # path_images = 'C:/Users/josef/serverBUAP/datasets/images_ISIC'
-    path_images = "C:/Users/josef/OneDrive - Universidad Veracruzana/DIA/NASGP-Net/comparison-datasets/folds"
+    # path_images = "C:/Users/josef/OneDrive - Universidad Veracruzana/DIA/NASGP-Net/comparison-datasets/folds"
+    path_images = "C:/Users/josef/serverBUAP/datasets/images_MAMMO2"
+    # path_images = "C:/Users/josef/serverBUAP/datasets/images_COVID"
+    # path_images = "C:/Users/josef/serverBUAP/datasets/images_POLYPGEN/data_C1"
     in_channels = 1
     out_channels = 2
     dataset_type = Dataset2D
     no_classes_msk = 2
-    image_height = 512
-    image_width = 512
-    batch_size = 2
+    image_height = 128
+    image_width = 128
+    batch_size = 4
 
     """Split Data (Percent or Static, 70-15-15)"""
-    # train_set, valid_set, test_set = dataSplit.get_data(0.7, 0.15, 0.15, path_images,_format='.png')
+    train_set, valid_set, test_set = dataSplit.get_data(0.7, 0.15, 0.15, path_images,_format='.png')
     # train_set, valid_set, test_set = dataStatic.get_data(path_images, val_size=0.1, _format='.png')
-    train_set, valid_set, test_set = dataStatic.get_data_folds(path_images, val_size=0.1, _format='.png')
+    # train_set, valid_set, test_set = dataStatic.get_data_folds(path_images, val_size=0.1, _format='.png')
     #%% Evolutionary process, evo-statics and parameters
     #Evolutionary parameters
-    pz = 5
-    ng = 2
+    pz = 20
+    ng = 2#10
     cxpb = 0.5
     mutpb = 0.49
     nelit = 1 
@@ -244,11 +247,11 @@ def GPMain(foldername):
     checkpoint_name = False#'checkpoint_evo.pkl'#,False
     verbose_evo = False
     max_params = 31038000
-    w = 0.3
-    k_folds = False
+    w = 0.01
+    k_folds = 3#False
 
     #Training_parameters
-    nepochs = 1
+    nepochs = 1#
     #alpha = 0.5
     #beta = 0.7
     #lossfn = ComboLoss(alpha=alpha, beta=beta, average="micro", include_background=True)
@@ -262,12 +265,11 @@ def GPMain(foldername):
         NSDMetric(average='macro', include_background=False, softmax=False, spacing_mm=spacing_mm, tolerance=1),
         ]
     lr = 0.0001
-    tolerance = 3
-    verbose_train=True
+    tolerance = 1
+    verbose_train=False
     device='cuda:0'
     save_model=False
     save_images=False
-    save_datafolds=False
     save_data=False
     
     toolbox.register("select", tools.selTournament, tournsize=tz)
@@ -295,32 +297,33 @@ def GPMain(foldername):
                                   verbose_train=verbose_train,
                                   save_model=save_model,
                                   save_images=save_images,
-                                  save_datafolds=save_datafolds)
+                                  save_data=save_data
+                                  )
 
     # toolbox.register("evaluate", evaluation, 
-    #                              nepochs=nepochs, 
-    #                              tolerance=tolerance, 
-    #                              lossfn=lossfn,
-    #                              metrics=metrics,
-    #                              lr=lr, 
-    #                              dataset_type = dataset_type,
-    #                              no_classes_msk = no_classes_msk,
-    #                              in_channels=in_channels, 
-    #                              out_channels=out_channels,
-    #                              batch_size = batch_size,
-    #                              image_height = image_height,
-    #                              image_width = image_width,
-    #                              max_params=max_params, w=w, 
-    #                              train_set=train_set, 
-    #                              valid_set=valid_set, 
-    #                              test_set=test_set,
-    #                              pset = pset, 
-    #                              device=device, 
-    #                              ruta=ruta, 
-    #                              verbose_train=verbose_train,
-    #                              save_model=save_model,
-    #                              save_images=save_images,
-    #                              save_data=save_data)
+    #                               nepochs=nepochs, 
+    #                               tolerance=tolerance, 
+    #                               lossfn=lossfn,
+    #                               metrics=metrics,
+    #                               lr=lr, 
+    #                               dataset_type = dataset_type,
+    #                               no_classes_msk = no_classes_msk,
+    #                               in_channels=in_channels, 
+    #                               out_channels=out_channels,
+    #                               batch_size = batch_size,
+    #                               image_height = image_height,
+    #                               image_width = image_width,
+    #                               max_params=max_params, w=w, 
+    #                               train_set=train_set, 
+    #                               valid_set=valid_set, 
+    #                               test_set=test_set,
+    #                               pset = pset, 
+    #                               device=device, 
+    #                               ruta=ruta, 
+    #                               verbose_train=verbose_train,
+    #                               save_model=save_model,
+    #                               save_images=save_images,
+    #                               save_data=save_data)
     
     #%%Run algorithm
     pop, log, cache = eaNASGPNet(pop_size = pz, toolbox = toolbox, 
@@ -353,7 +356,7 @@ def GPMain(foldername):
     functionAnalysis(pop,10,pset,ruta)
     
     #%%%change parameters values
-    nepochs=5
+    nepochs=1
     tolerance=3
     verbose_train=True
     save_model=True
@@ -376,4 +379,18 @@ def GPMain(foldername):
     
 if __name__=='__main__':
     # mp.set_start_melthod('forkserver')
-    log, pop, best = GPMain('MAMMO-PRUEBA')
+    #/mammo/ MAMMO-PRUEBA2
+    #/polypgen/ POLYPGEN-PRUEBA-1
+    log, pop, best = GPMain('MAMMO-PRUEBA-3')
+    
+#%%Read a mask from mammo
+# import skimage.io as io
+# from skimage.color import rgb2gray
+# import numpy as np
+# mask_id = "C:/Users/josef/serverBUAP/datasets/images_POLYPGEN/data_C1/targets/100H0050_mask.jpg"
+# # mask_id = "C:/Users/josef/OneDrive - Universidad Veracruzana/DIA/NASGP-Net/comparison-datasets/folds/1/train/targets/2.1-segmentado_bin.png"
+# mask=io.imread(mask_id)
+# mask=rgb2gray(mask)
+# mask=255*mask.astype(np.uint8)
+
+# print(mask.shape, mask.max(), mask.min(), np.unique(mask))

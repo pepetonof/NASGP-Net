@@ -1,68 +1,69 @@
 from torch.utils.data import Dataset
-from skimage import io
 import numpy as np
-
+from skimage import io
+from skimage.color import rgb2gray
+from skimage.filters import threshold_otsu
 import nrrd
 import nibabel as nib
 import torch
 
 #For multiclass segmentation and CrossEntropyLoss
-class DataSet(Dataset):
-    def __init__(self, image_dir, mask_dir, transform=None, no_classes=2):
-        self.image_dir= image_dir
-        self.mask_dir = mask_dir
-        self.transform = transform
+# class DataSet(Dataset):
+#     def __init__(self, image_dir, mask_dir, transform=None, no_classes=2):
+#         self.image_dir= image_dir
+#         self.mask_dir = mask_dir
+#         self.transform = transform
         
-        #Adapt to the number of clases/out_channels
-        # self.no_clases = n
-        # interval = 256/(no_classes-1)
-        # self.vals_class = np.array([round(i * interval) for i in range(no_classes)])
-        # self.vals_class[1:] -= 1
+#         #Adapt to the number of clases/out_channels
+#         # self.no_clases = n
+#         # interval = 256/(no_classes-1)
+#         # self.vals_class = np.array([round(i * interval) for i in range(no_classes)])
+#         # self.vals_class[1:] -= 1
         
-        self.vals_mask=np.array(list(range(no_classes)))
+#         self.vals_mask=np.array(list(range(no_classes)))
         
-        # no_classes = len(np.unique(mask))
-        interval = 256/(no_classes-1)
-        self.vals_class = np.array([round(i * interval) for i in range(no_classes)])
-        self.vals_class[1:] -= 1
+#         # no_classes = len(np.unique(mask))
+#         interval = 256/(no_classes-1)
+#         self.vals_class = np.array([round(i * interval) for i in range(no_classes)])
+#         self.vals_class[1:] -= 1
 
-    def __len__(self):
-        return len(self.image_dir)
+#     def __len__(self):
+#         return len(self.image_dir)
     
-    def __getitem__(self, index:int):
-        img_id  =self.image_dir[index]
-        mask_id =self.mask_dir[index]
+#     def __getitem__(self, index:int):
+#         img_id  =self.image_dir[index]
+#         mask_id =self.mask_dir[index]
         
-        image=io.imread(img_id)
-        mask =io.imread(mask_id)
-        # print(image.shape, mask.shape)
+#         image=io.imread(img_id)
+#         mask =io.imread(mask_id)
+#         # print(image.shape, mask.shape)
         
-        # no_classes = len(np.unique(mask))
-        # interval = 256/(no_classes-1)
-        # self.vals_class = np.array([round(i * interval) for i in range(no_classes)])
-        # self.vals_class[1:] -= 1
+#         # no_classes = len(np.unique(mask))
+#         # interval = 256/(no_classes-1)
+#         # self.vals_class = np.array([round(i * interval) for i in range(no_classes)])
+#         # self.vals_class[1:] -= 1
         
-        # print('Vals_class:\t',  self.vals_class)
-        # print('Vals_mask:\t', self.vals_mask)
+#         # print('Vals_class:\t',  self.vals_class)
+#         # print('Vals_mask:\t', self.vals_mask)
         
-        #Multiclass
-        # for val_p, val_msk in zip(self.vals_class[1:], self.vals_mask[1:]):
-        #     mask[mask==val_p] = 1.0 #val_msk
-        #     print('val_changed', val_p)
+#         #Multiclass
+#         # for val_p, val_msk in zip(self.vals_class[1:], self.vals_mask[1:]):
+#         #     mask[mask==val_p] = 1.0 #val_msk
+#         #     print('val_changed', val_p)
         
-        #Join ROI
-        for val_p in self.vals_class[1:]:
-            mask[mask==val_p] = 1.0
-            # print('val_changed', val_p)
+#         #Join ROI
+#         for val_p in self.vals_class[1:]:
+#             mask[mask==val_p] = 1.0
+#             # print('val_changed', val_p)
         
-        # print('DifferentValuesReadChanged:\t', np.unique(mask))
+#         # print('DifferentValuesReadChanged:\t', np.unique(mask))
         
-        if self.transform is not None:
-            augmentations = self.transform(image=image, mask=mask)
-            image=augmentations["image"]
-            mask=augmentations["mask"]
+#         if self.transform is not None:
+#             augmentations = self.transform(image=image, mask=mask)
+#             image=augmentations["image"]
+#             mask=augmentations["mask"]
         
-        return image, mask
+#         return image, mask
 
 class Dataset3D(Dataset):
     def __init__(self, image_dir:list, mask_dir:list, transform=None, no_classes=2):
@@ -157,10 +158,19 @@ class Dataset2D(Dataset):
         
         image=io.imread(img_id)
         mask =io.imread(mask_id)
+        # print('MASK-Readed', mask.shape, mask.max(), mask.min(), mask.dtype, type(mask), np.unique(mask))
         
-        # print('IMAGE', image.shape, image.max(), image.min(), image.dtype, type(image), np.unique(image))
-        # print('MASK', mask.shape, mask.max(), mask.min(), mask.dtype, type(mask), np.unique(mask)) 
-        
+        #If mask is RGB, convert to grayscale
+        if len(mask.shape)>2:
+            mask=rgb2gray(mask)
+            # print('MASK-GRAYSCALE1', mask.shape, mask.max(), mask.min(), mask.dtype, type(mask), np.unique(mask))
+            
+        #If mask is grayscale, binarize
+        if len(np.unique(mask))>2:
+            thresh = threshold_otsu(mask)
+            mask = mask>thresh
+            mask = 255*mask.astype(np.uint8)
+
         mask[mask==255]=1.0
         
         if self.transform is not None:
@@ -169,6 +179,6 @@ class Dataset2D(Dataset):
             mask=augmentations["mask"]
         
         # print('IMAGET', img_id, index, image.shape, image.max(), image.min(), image.dtype)
-        # print('MASKT', index, mask.shape, mask.max(), mask.min(), mask.dtype, np.unique(mask)) 
+        # print('MASK-Transformed', index, mask.shape, mask.max(), mask.min(), mask.dtype, np.unique(mask)) 
         
         return image, mask

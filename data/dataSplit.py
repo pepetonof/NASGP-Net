@@ -54,7 +54,7 @@ def get_data(train_size, val_size, test_size, p, _format='.png'):
     
     dirs=[x for x in p.iterdir() if x.is_dir()] #Directorios
     dirs.sort(key=lambda d: d.name)
-    dirs=dirs[:2]##!!!
+    # dirs=dirs[:2]##!!!
     files_inp=list(dirs[0].glob('**/*'+_format)) #Images input
     files_msk=list(dirs[1].glob('**/*'+_format)) #Images output
     
