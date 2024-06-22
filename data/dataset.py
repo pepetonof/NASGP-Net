@@ -4,7 +4,7 @@ from skimage import io
 from skimage.color import rgb2gray
 from skimage.filters import threshold_otsu
 # import nrrd
-# import nibabel as nib
+import nibabel as nib
 import torch
 
 #For multiclass segmentation and CrossEntropyLoss
@@ -65,53 +65,53 @@ import torch
         
 #         return image, mask
 
-# class Dataset3D(Dataset):
-#     def __init__(self, image_dir:list, mask_dir:list, transform=None, no_classes=2):
-#         self.image_dir= image_dir
-#         self.mask_dir = mask_dir
-#         self.transform = transform
-#         self.vals_mask=np.array(list(range(no_classes)))
+class Dataset3D(Dataset):
+    def __init__(self, image_dir:list, mask_dir:list, transform=None, no_classes=2):
+        self.image_dir= image_dir
+        self.mask_dir = mask_dir
+        self.transform = transform
+        self.vals_mask=np.array(list(range(no_classes)))
         
-#     def __len__(self):
-#         return len(self.image_dir)
+    def __len__(self):
+        return len(self.image_dir)
     
-#     def __getitem__(self, index:int):
-#         vol_id  =self.image_dir[index]
-#         mask_id =self.mask_dir[index]
-#         if str(vol_id)[-4:]=='.png':
-#             raise TypeError('Data is not 3D')
-#             # vol=io.imread(vol_id)
-#             # mask =io.imread(mask_id)
-#         elif str(vol_id)[-3:]=='.gz':
-#             vol =  nib.load(vol_id).get_fdata().astype(np.uint8)
-#             mask = nib.load(mask_id).get_fdata().astype(np.uint8)
-#         elif str(vol_id)[-5:]=='.nrrd':
-#             vol = nrrd.read(vol_id)
-#             mask = nrrd.read(mask_id)
+    def __getitem__(self, index:int):
+        vol_id  =self.image_dir[index]
+        mask_id =self.mask_dir[index]
+        if str(vol_id)[-4:]=='.png':
+            raise TypeError('Data is not 3D')
+            # vol=io.imread(vol_id)
+            # mask =io.imread(mask_id)
+        elif str(vol_id)[-3:]=='.gz':
+            vol =  nib.load(vol_id).get_fdata().astype(np.uint8)
+            mask = nib.load(mask_id).get_fdata().astype(np.uint8)
+        # elif str(vol_id)[-5:]=='.nrrd':
+        #     vol = nrrd.read(vol_id)
+        #     mask = nrrd.read(mask_id)
             
-#         # print(vol.shape, vol.max(), vol.min(), vol.dtype)
-#         # print(mask.shape, mask.max(), mask.min(), mask.dtype, np.unique(mask)) 
+        # print(vol.shape, vol.max(), vol.min(), vol.dtype)
+        # print(mask.shape, mask.max(), mask.min(), mask.dtype, np.unique(mask)) 
         
-#         #Select one dimension for 4D
-#         if (len(vol.shape)>3):
-#             vol = vol[:,:,:,1]
+        #Select one dimension for 4D
+        if (len(vol.shape)>3):
+            vol = vol[:,:,:,1]
         
-#         #Join ROI
-#         for val_p in self.vals_mask[1:]:
-#             mask[mask==val_p] = 1.0
+        #Join ROI
+        for val_p in self.vals_mask[1:]:
+            mask[mask==val_p] = 1.0
         
-#         #Apply transform
-#         if self.transform is not None:
-#             augmentations = self.transform(image=vol, mask=mask)
-#             # print(vol.shape, vol.max(), vol.min(), vol.dtype)
-#             # print(mask.shape, mask.max(), mask.min(), mask.dtype)
-#             vol=augmentations["image"]
-#             mask=augmentations["mask"]
-#             # print('Transform')
-#             # print(vol.shape, vol.max(), vol.min(), vol.dtype)
-#             # print(mask.shape, mask.max(), mask.min(), mask.dtype, np.unique(mask))
+        #Apply transform
+        if self.transform is not None:
+            augmentations = self.transform(image=vol, mask=mask)
+            # print(vol.shape, vol.max(), vol.min(), vol.dtype)
+            # print(mask.shape, mask.max(), mask.min(), mask.dtype)
+            vol=augmentations["image"]
+            mask=augmentations["mask"]
+            # print('Transform')
+            # print(vol.shape, vol.max(), vol.min(), vol.dtype)
+            # print(mask.shape, mask.max(), mask.min(), mask.dtype, np.unique(mask))
         
-#         return vol, mask
+        return vol, mask
     
 class Dataset3D22D(Dataset):
     def __init__(self, image_data, mask_data):
