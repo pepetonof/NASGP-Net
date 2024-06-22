@@ -7,7 +7,7 @@ Created on Tue Apr 26 21:25:34 2022
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-import pygraphviz as pgv
+# import pygraphviz as pgv
 import matplotlib.pyplot as plt
 # import networkx as nx
 from deap.gp import *
@@ -567,16 +567,16 @@ def evaluationMP(ind, nepochs, lossfn, lr,
 
 """Functions fot storage model, train and valid loss, graph as .png and .txt and segmented images"""
 def save_ind(ind, ruta, filename='tree'):
-    tree=PrimitiveTree(ind)
-    nodes, edges, labels = graph(tree)
-    g = pgv.AGraph(directed=False)
-    g.add_nodes_from(nodes)
-    g.add_edges_from(edges)
-    g.layout(prog="dot")
+    # tree=PrimitiveTree(ind)
+    # nodes, edges, labels = graph(tree)
+    # g = pgv.AGraph(directed=False)
+    # g.add_nodes_from(nodes)
+    # g.add_edges_from(edges)
+    # g.layout(prog="dot")
     
-    for i in nodes:
-        n = g.get_node(i)
-        n.attr["label"] = labels[i]   
+    # for i in nodes:
+    #     n = g.get_node(i)
+    #     n.attr["label"] = labels[i]   
     
     txt_f=open(ruta + "/"+filename+".txt", "w")
     txt_f.write(str(ind))
@@ -585,7 +585,7 @@ def save_ind(ind, ruta, filename='tree'):
     txt_f.write('Params:\t'+str(ind.params))
     txt_f.close()
     
-    g.draw(ruta + "/" + filename + '.png')
+    # g.draw(ruta + "/" + filename + '.png')
     return
 
 # """Shows a tree that represents an individual"""
