@@ -3,7 +3,7 @@ import numpy as np
 from skimage import io
 from skimage.color import rgb2gray
 from skimage.filters import threshold_otsu
-# import nrrd
+import nrrd
 import nibabel as nib
 import torch
 
@@ -85,9 +85,9 @@ class Dataset3D(Dataset):
         elif str(vol_id)[-3:]=='.gz':
             vol =  nib.load(vol_id).get_fdata().astype(np.uint8)
             mask = nib.load(mask_id).get_fdata().astype(np.uint8)
-        # elif str(vol_id)[-5:]=='.nrrd':
-        #     vol = nrrd.read(vol_id)
-        #     mask = nrrd.read(mask_id)
+        elif str(vol_id)[-5:]=='.nrrd':
+            vol = nrrd.read(vol_id)
+            mask = nrrd.read(mask_id)
             
         # print(vol.shape, vol.max(), vol.min(), vol.dtype)
         # print(mask.shape, mask.max(), mask.min(), mask.dtype, np.unique(mask)) 

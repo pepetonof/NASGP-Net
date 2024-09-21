@@ -104,7 +104,8 @@ class MyModule_AddSubCat(nn.Module):
             for e in m:
                 xclone=e(xclone)
                 # print('AddSubCat', idx, xclone.shape)
-            outputs.append(xclone)    
+            outputs.append(xclone)
+            # del x
             
             # #forward for each element in list
             # outputs.append(m(x))

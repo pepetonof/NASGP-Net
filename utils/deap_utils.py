@@ -15,27 +15,35 @@ import matplotlib.pyplot as plt
 
 """Functions to create multistatics and manipulate 'log' variable after evolutionary process"""
 #%%Statics for evolutionary process
-def statics_():
-    # ##Statics
-    stats_fit = tools.Statistics(lambda individual: individual.fitness.values)
-    stats_size = tools.Statistics(len)
-    stats_depth = tools.Statistics(lambda individual: individual.height)
-    stats_dice = tools.Statistics(lambda individual: individual.dice)
-    stats_iou = tools.Statistics(lambda individual: individual.iou)
-    stats_hd = tools.Statistics(lambda individual: individual.hd)
-    stats_hd95 = tools.Statistics(lambda individual: individual.hd95)
-    stats_nds = tools.Statistics(lambda individual: individual.nsd)
-    stats_params = tools.Statistics(lambda individual: individual.params)
+def statics_(metrics):
+    # Statics
+    dict_stats = {"Fitness":tools.Statistics(lambda individual: individual.fitness.values),
+                  "Size":tools.Statistics(len),
+                  "Depth":tools.Statistics(lambda individual: individual.height),
+                  "Params":tools.Statistics(lambda individual: individual.params)}
+    
+    for m in metrics:
+        key = str(type(m)).strip('>').strip("'").split('.')[-1]
+        dict_stats[key]=tools.Statistics(lambda individual: getattr(individual, key))
+            
+        
+    # stats_iou = tools.Statistics(lambda individual: individual.iou)
+    # stats_hd = tools.Statistics(lambda individual: individual.hd)
+    # stats_hd95 = tools.Statistics(lambda individual: individual.hd95)
+    # stats_nds = tools.Statistics(lambda individual: individual.nsd)
 
-    mstats = tools.MultiStatistics(Fitness=stats_fit, 
-                                   Dice=stats_dice,
-                                   IoU=stats_iou,
-                                   HD=stats_hd,
-                                   HD95=stats_hd95,
-                                   NSD=stats_nds,
-                                   Params=stats_params,
-                                   Size=stats_size, 
-                                   Depth=stats_depth,)
+
+    # mstats = tools.MultiStatistics(Fitness=stats_fit, 
+    #                                Dice=stats_dice,
+    #                                IoU=stats_iou,
+    #                                HD=stats_hd,
+    #                                HD95=stats_hd95,
+    #                                NSD=stats_nds,
+    #                                Params=stats_params,
+    #                                Size=stats_size, 
+    #                                Depth=stats_depth,)
+    
+    mstats = tools.MultiStatistics(dict_stats)
     
     mstats.register("mean", np.mean)
     mstats.register("median", np.median)
@@ -118,10 +126,10 @@ def show_statics(estadisticas, rutita):
     
     def metrics():
         gen=estadisticas.select("gen")
-        dice=estadisticas.chapters["Dice"].select('mean')
-        iou=estadisticas.chapters["IoU"].select('mean')
-        hds=estadisticas.chapters["HD95"].select('mean')
-        nsd=estadisticas.chapters["NSD"].select('mean')
+        dice=estadisticas.chapters["DiceMetric"].select('mean')
+        iou=estadisticas.chapters["IoUMetric"].select('mean')
+        hds=estadisticas.chapters["HD95Metric"].select('mean')
+        nsd=estadisticas.chapters["NSDMetric"].select('mean')
         
         fig, host = plt.subplots()
         par1=host.twinx()
@@ -188,7 +196,7 @@ def show_statics(estadisticas, rutita):
     convergence_graph()
     convergence_graph2()
     size_depth()
-    metrics()
+    # metrics()
     return
 
 #%% Save as csv

@@ -54,13 +54,19 @@ def get_data(train_size, val_size, test_size, p, _format='.png'):
     
     dirs=[x for x in p.iterdir() if x.is_dir()] #Directorios
     dirs.sort(key=lambda d: d.name)
+    # print('Dirs', dirs)
     # dirs=dirs[:2]##!!!
     files_inp=list(dirs[0].glob('**/*'+_format)) #Images input
     files_msk=list(dirs[1].glob('**/*'+_format)) #Images output
     
+    #print([img.name for img in files_inp[:5]])
+    #print([file.name for file in files_msk[:5]])
     #Ordering according to index in tittle image
-    files_inp.sort(key=get_ind)
-    files_msk.sort(key=get_ind)
+    # files_inp.sort(key=get_ind)
+    # files_msk.sort(key=get_ind)
+    
+    # print([img.name for img in files_inp[:5]])
+    # print([file.name for file in files_msk[:5]])
 
     random_seed=0
     # print("files Input", files_inp)

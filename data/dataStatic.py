@@ -34,7 +34,7 @@ def get_data(p, val_size=0.1, _format='.png'):
     
     if 'valid' in [d.name for d in dirs]:
         valid=[x for x in dirs[[d.name for d in dirs].index('valid')].iterdir() if x.is_dir()]
-        valid.sort(key=lambda d: d.name)
+        # valid.sort(key=lambda d: d.name)
         
         VAL_IMG_DIR   = list(valid[0].glob('**/*'+_format))
         VAL_MASK_DIR  = list(valid[1].glob('**/*'+_format))

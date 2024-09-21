@@ -363,7 +363,7 @@ def train_and_validate(model, train_loader, val_loader,
         line1 = ax1.plot(epochs, train_loss, "b-", label="Train loss")
         line2 = ax1.plot(epochs, valid_loss, "r-", label="Valid loss")
         ax1.set_xlabel("Epoch")
-        ax1.set_xticks(np.arange(0, len(epochs), 2))
+        ax1.set_xticks(np.arange(0, len(epochs), 5))
         ax1.set_ylabel("Loss")
         lns=line1+line2
         labs = [l.get_label() for l in lns]
@@ -380,7 +380,7 @@ def train_and_validate(model, train_loader, val_loader,
         line2 = ax1.plot(epochs, valid_dice, "r-", label="Valid Dice")
         ax1.set_xlabel("Epoch")
         ax1.set_ylabel("Dice")
-        ax1.set_xticks(np.arange(0, len(epochs), 2))
+        ax1.set_xticks(np.arange(0, len(epochs), 5))
         lns=line1+line2
         labs = [l.get_label() for l in lns]
         ax1.legend(line1+line2, labs, loc="center right")

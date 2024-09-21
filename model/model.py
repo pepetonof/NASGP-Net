@@ -198,7 +198,7 @@ class BackBone(nn.Module):
         self.downs, self.bottleneck, self.ups = backbone.generate_cells(first_block, 4, out_channels)
 
         #Dropout of 50%
-        self.dropout = nn.Dropout(p=0.5)
+        self.dropout = nn.Dropout(p=0.25)
         
         #Change in_channels for depthwise separable convolution
         self.set_ch_rec(self.downs)
@@ -309,11 +309,12 @@ class BackBone(nn.Module):
             # print('Down1\t', x.shape)
             skip_connections.append(x)
             x = down.forwardpart(x, 'second')
+            x = self.dropout(x)
             # print('Down2\t', x.shape)
         # print('Downs', x.shape)
         
         # #Apply 1st dropout
-        x = self.dropout(x)
+        # x = self.dropout(x)
         #Bottleneck
         x = self.bottleneck(x)
         #Apply 2nd dropout
@@ -347,6 +348,8 @@ class BackBone(nn.Module):
             # concat_skip = skip_connection+x
             # print('concat:\t', concat_skip.shape)
             x = self.ups[idx](concat_skip)
+            if idx<len(self.ups)-1:
+                x=self.dropout(x)
             # print('Up block:\t', x.shape)
 
         return x

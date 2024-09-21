@@ -42,6 +42,8 @@ from metrics.segmentation_metrics import DiceMetric, IoUMetric, HDMetric, NSDMet
 #%%Pset
 pset = gp_tree.PrimitiveSetTyped("main", [moduleTorch], moduleTorchP)
 
+#Number of blocks layer??
+
 #Pooling Layer
 pset.addPrimitive(maxpool, [moduleTorchL], 
                   moduleTorchP, name='mpool')
@@ -211,7 +213,7 @@ def GPMain(foldername):
     """Create folder to storage"""
     # path='/scratch/202201016n'
     path= "C:/Users/josef/serverBUAP/corridas"
-    ruta=path+"/mammo/"+str(foldername)
+    ruta=path+"/covid/"+str(foldername)
     if not os.path.exists(ruta):
         os.makedirs(ruta)
     
@@ -219,16 +221,16 @@ def GPMain(foldername):
     # path_images='/home/202201016n/serverBUAP/datasets/images_COVID'
     # path_images = 'C:/Users/josef/serverBUAP/datasets/images_ISIC'
     # path_images = "C:/Users/josef/OneDrive - Universidad Veracruzana/DIA/NASGP-Net/comparison-datasets/folds"
-    path_images = "C:/Users/josef/serverBUAP/datasets/images_MAMMO2"
-    # path_images = "C:/Users/josef/serverBUAP/datasets/images_COVID"
+    path_images = "C:/Users/josef/serverBUAP/datasets/images_COVID"
+    # path_images = "C:/Users/josef/serverBUAP/datasets/images_C"
     # path_images = "C:/Users/josef/serverBUAP/datasets/images_POLYPGEN/data_C1"
     in_channels = 1
     out_channels = 2
     dataset_type = Dataset2D
     no_classes_msk = 2
-    image_height = 128
-    image_width = 128
-    batch_size = 4
+    image_height = 256
+    image_width = 256
+    batch_size = 1
 
     """Split Data (Percent or Static, 70-15-15)"""
     train_set, valid_set, test_set = dataSplit.get_data(0.7, 0.15, 0.15, path_images,_format='.png')
@@ -236,8 +238,8 @@ def GPMain(foldername):
     # train_set, valid_set, test_set = dataStatic.get_data_folds(path_images, val_size=0.1, _format='.png')
     #%% Evolutionary process, evo-statics and parameters
     #Evolutionary parameters
-    pz = 20
-    ng = 2#10
+    pz = 100
+    ng = 10
     cxpb = 0.5
     mutpb = 0.49
     nelit = 1 
@@ -251,21 +253,17 @@ def GPMain(foldername):
     k_folds = 3#False
 
     #Training_parameters
-    nepochs = 1#
+    nepochs = 10#
     #alpha = 0.5
     #beta = 0.7
     #lossfn = ComboLoss(alpha=alpha, beta=beta, average="micro", include_background=True)
     lossfn = DiceLoss(average='macro', include_background=False, softmax=False, eps=1e-8)
-
-    spacing_mm = (1,1,0)
-    metrics = [
+    metrics_segmentation = [
         DiceMetric(average='macro', include_background=False, softmax=False, eps=1e-8),
-        IoUMetric(average='macro', include_background=False, softmax=False, eps=1e-8),
-        HDMetric(average='macro', include_background=False, softmax=False, spacing_mm=spacing_mm),
-        NSDMetric(average='macro', include_background=False, softmax=False, spacing_mm=spacing_mm, tolerance=1),
         ]
+    
     lr = 0.0001
-    tolerance = 1
+    tolerance = 3
     verbose_train=False
     device='cuda:0'
     save_model=False
@@ -277,7 +275,7 @@ def GPMain(foldername):
                                   nepochs=nepochs, 
                                   tolerance=tolerance, 
                                   lossfn=lossfn,
-                                  metrics=metrics,
+                                  metrics=metrics_segmentation,
                                   lr=lr, 
                                   dataset_type = dataset_type,
                                   no_classes_msk = no_classes_msk,
@@ -291,9 +289,9 @@ def GPMain(foldername):
                                   train_set=train_set, 
                                   valid_set=valid_set, 
                                   test_set=test_set,
-                                  pset = pset, 
+                                  pset = pset,
+                                  ruta=ruta,
                                   device=device, 
-                                  ruta=ruta, 
                                   verbose_train=verbose_train,
                                   save_model=save_model,
                                   save_images=save_images,
@@ -318,8 +316,8 @@ def GPMain(foldername):
     #                               valid_set=valid_set, 
     #                               test_set=test_set,
     #                               pset = pset, 
+    #                               ruta=ruta,
     #                               device=device, 
-    #                               ruta=ruta, 
     #                               verbose_train=verbose_train,
     #                               save_model=save_model,
     #                               save_images=save_images,
@@ -356,21 +354,38 @@ def GPMain(foldername):
     functionAnalysis(pop,10,pset,ruta)
     
     #%%%change parameters values
-    nepochs=1
-    tolerance=3
+    nepochs=100
+    k_folds = 5
+    tolerance=5
+    spacing_mm = (1,1,0)
+    metrics_segmentation = [
+        DiceMetric(average='macro', include_background=False, softmax=False, eps=1e-8),
+        IoUMetric(average='macro', include_background=False, softmax=False, eps=1e-8),
+        HDMetric(average='macro', include_background=False, softmax=False, spacing_mm=spacing_mm),
+        NSDMetric(average='macro', include_background=False, softmax=False, spacing_mm=spacing_mm, tolerance=1),
+        ]
     verbose_train=True
     save_model=True
     save_images=True
     save_data=True
 
     #%%%Re evaluate best individual and save data
-    fit, dice, iou, hds, hds95, nsds, params = toolbox.evaluate(best,
-                                                                nepochs=nepochs,
-                                                                tolerance=tolerance,
-                                                                verbose_train=verbose_train,
-                                                                save_model=save_model,
-                                                                save_images=save_images,
-                                                                save_data=save_data)
+    fit = toolbox.evaluate(best,
+                           nepochs=nepochs,
+                           tolerance=tolerance,
+                           k_folds=k_folds,
+                           verbose_train=verbose_train,
+                           save_model=save_model,
+                           save_images=save_images,
+                           save_data=save_data)
+    
+    best.fitness.values = fit[0],
+    best.dice = fit[1]
+    best.iou = fit[2]
+    best.hd = fit[3]
+    best.hd95 = fit[4]
+    best.nsd = fit[5]
+    best.params = fit[6]
 
     #%%%Save execution
     save_execution(ruta, foldername+'.pkl', pop, log, cache, best)
@@ -381,7 +396,7 @@ if __name__=='__main__':
     # mp.set_start_melthod('forkserver')
     #/mammo/ MAMMO-PRUEBA2
     #/polypgen/ POLYPGEN-PRUEBA-1
-    log, pop, best = GPMain('MAMMO-PRUEBA-3')
+    log, pop, best = GPMain('COVID-PRUEBA-CDROP')
     
 #%%Read a mask from mammo
 # import skimage.io as io
